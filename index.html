@@ -1085,7 +1085,11 @@ function renderWho() {
 }
 function setNet() {
   const el = $("netline");
-  if (!room) { el.textContent = "Offline · you and bots"; $("roster").textContent = ""; return; }
+  if (!room) {
+    el.textContent = !me.playing ? (hashCode() ? `Enter to join game ${hashCode()}` : "Enter the arena to go online")
+      : netBusy ? "Connecting…" : "Couldn't connect · you and bots";
+    $("roster").textContent = ""; return;
+  }
   if (!connected) { el.textContent = "Reconnecting…"; return; }
   renderRoster();
 }
