@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>[hidden]{display:none!important}body{margin:0}</style>
+</head>
+<body>
+<title>Steelball Hoops</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Semi+Condensed:wght@400;600;700&display=swap">
+<style>
+/* Layout: full-bleed live arena canvas; HUD pinned to the edges; entry panel docked left over the running match. */
+:root {
+  --bg: #0b0e12;
+  --panel: rgba(10, 13, 18, 0.84);
+  --fg: #e9edf2;
+  --muted: #8d99a8;
+  --line: rgba(233, 237, 242, 0.16);
+  --iron: #ff7a1a;
+  --volt: #2fd6ff;
+  --display: "Saira Stencil One", "Impact", "Arial Narrow", sans-serif;
+  --ui: "Saira Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--fg); font-family: var(--ui); font-size: 15px; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+
+.hud { position: fixed; pointer-events: none; font-variant-numeric: tabular-nums; }
+#score {
+  top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;
+  background: var(--panel); border: 1px solid var(--line); padding: 6px 16px; border-radius: 3px;
+  min-width: min(440px, calc(100vw - 32px));
+}
+#score .tn { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 14px; }
+#score .tn.l { text-align: right; color: var(--iron); }
+#score .tn.r { color: var(--volt); }
+#score .mid { display: grid; justify-items: center; line-height: 1; }
+#score .goals { font-family: var(--display); font-size: 30px; letter-spacing: 0.04em; }
+#score .clock { font-size: 13px; color: var(--muted); margin-top: 3px; letter-spacing: 0.1em; }
+
+#net {
+  top: calc(12px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 13px; color: var(--muted); text-align: right; display: grid; gap: 2px;
+}
+#net b { color: var(--fg); font-weight: 600; }
+#roster { font-size: 12px; line-height: 1.45; }
+
+#radar {
+  top: calc(12px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  width: 168px; height: 104px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+}
+
+#me {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  display: grid; gap: 6px; font-size: 13px;
+}
+#me .who { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.bar { width: 180px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 1px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 100%; background: var(--fg); transform-origin: left; }
+#me .lab { color: var(--muted); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+#keys {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 12px; color: var(--muted); text-align: right; line-height: 1.6;
+}
+kbd {
+  font-family: var(--ui); font-weight: 700; font-size: 11px; color: var(--fg);
+  border: 1px solid var(--line); border-bottom-width: 2px; padding: 0 5px; border-radius: 2px;
+}
+
+#cross {
+  top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  background:
+    linear-gradient(var(--fg), var(--fg)) center/2px 6px no-repeat,
+    linear-gradient(var(--fg), var(--fg)) center/6px 2px no-repeat;
+  opacity: 0.8;
+}
+#charge {
+  top: calc(50% + 34px); left: 50%; transform: translateX(-50%); width: 140px; display: grid; gap: 4px; justify-items: center;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+#charge .bar { width: 140px; height: 5px; position: relative; }
+#charge .bar::after { content: ""; position: absolute; left: 60%; top: -3px; bottom: -3px; width: 2px; background: var(--iron); }
+#banner {
+  top: 28%; left: 0; right: 0; text-align: center; font-family: var(--display);
+  font-size: clamp(40px, 9vw, 104px); letter-spacing: 0.04em; line-height: 1;
+  text-shadow: 0 4px 30px rgba(0,0,0,0.6);
+}
+#banner small { display: block; font-family: var(--ui); font-weight: 700; font-size: clamp(14px, 2vw, 20px); letter-spacing: 0.3em; margin-top: 8px; color: var(--fg); }
+#hurt { inset: 0; opacity: 0; box-shadow: inset 0 0 180px 60px rgba(170, 18, 8, 0.85); }
+#down {
+  top: 36%; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; justify-items: center;
+  font-family: var(--display); font-size: clamp(30px, 5vw, 48px); letter-spacing: 0.04em; text-shadow: 0 3px 20px rgba(0,0,0,0.7);
+}
+#down .bar { width: 200px; height: 6px; }
+#toast { top: 60%; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; font-size: 15px; }
+
+#menu {
+  position: fixed; inset: 0; display: flex; align-items: safe center; overflow-y: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+  background: linear-gradient(90deg, rgba(8,10,14,0.92) 0%, rgba(8,10,14,0.7) 40%, rgba(8,10,14,0) 75%);
+}
+.card { width: min(460px, 100%); display: grid; gap: 18px; padding-left: clamp(0px, 4vw, 48px); }
+.card h1 {
+  margin: 0; font-family: var(--display); font-weight: 400; line-height: 0.88;
+  font-size: clamp(54px, 10vw, 92px); letter-spacing: 0.01em; text-wrap: balance;
+}
+.card h1 span { display: block; color: var(--iron); }
+.card h1 span + span { color: var(--volt); }
+.card p { margin: 0; color: var(--muted); line-height: 1.5; max-width: 40ch; }
+.teams { display: flex; gap: 10px; flex-wrap: wrap; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 13px; }
+.teams span { border: 1px solid currentColor; padding: 3px 8px; border-radius: 2px; }
+.teams .a { color: var(--iron); } .teams .b { color: var(--volt); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row input {
+  flex: 1 1 180px; min-width: 0; font: 600 16px var(--ui); color: var(--fg); background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line); border-radius: 2px; padding: 10px 12px;
+}
+.row input:focus-visible, .row button:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+.row button {
+  font: 700 16px var(--ui); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+  color: #12090a; background: var(--iron); border: 0; border-radius: 2px; padding: 10px 20px;
+}
+.row button:hover { filter: brightness(1.1); }
+.classes { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stats { grid-template-columns: auto 1fr; }
+.classes legend { padding: 0; margin-bottom: 8px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.cls { position: relative; display: grid; gap: 6px; align-content: start; padding: 10px; border: 1px solid var(--line); border-radius: 2px; cursor: pointer; background: rgba(255,255,255,0.03); }
+.cls input { position: absolute; opacity: 0; pointer-events: none; }
+.cls:has(input:checked) { border-color: var(--fg); background: rgba(255,255,255,0.1); }
+.cls:has(input:focus-visible) { outline: 2px solid var(--volt); outline-offset: 2px; }
+.cn { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 14px; line-height: 1.1; }
+.cd { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 6px; margin: 0; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); align-items: center; }
+.stats dd { margin: 0; display: flex; gap: 2px; }
+.stats i { width: 7px; height: 7px; background: rgba(255,255,255,0.14); }
+.stats i.on { background: var(--fg); }
+@media (max-width: 440px) { .classes { grid-template-columns: 1fr; } }
+.ctl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; color: var(--muted); align-items: baseline; }
+.ctl dt { text-align: right; white-space: nowrap; }
+.ctl dd { margin: 0; }
+.note { font-size: 12px; color: var(--muted); }
+
+#pause {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  background: var(--panel); border: 1px solid var(--line); padding: 10px 18px; border-radius: 3px;
+  font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 14px;
+}
+@media (max-width: 640px) {
+  #keys, #radar { display: none; }
+  #score { gap: 8px; padding: 6px 10px; }
+  #score .tn { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #banner { text-shadow: none; } }
+</style>
+
+<canvas id="c" tabindex="0" aria-label="Arena view"></canvas>
+
+<div id="score" class="hud" aria-live="polite">
+  <div class="tn l">Ironclads</div>
+  <div class="mid"><div class="goals" id="goals">0 – 0</div><div class="clock" id="clock">4:00</div></div>
+  <div class="tn r">Voltage</div>
+</div>
+<canvas id="radar" class="hud" width="168" height="104"></canvas>
+<div id="net" class="hud"><div id="netline">Connecting…</div><div id="roster"></div></div>
+<div id="me" class="hud" hidden>
+  <div class="who" id="who">#2 Ironclads</div>
+  <div class="lab">Stamina</div>
+  <div class="bar"><i id="stam"></i></div>
+  <div class="lab" id="viewlab">First person</div>
+</div>
+<div id="keys" class="hud" hidden>
+  <kbd>LMB</kbd> hold to throw / kick &nbsp; <kbd>Q</kbd> pass &nbsp; <kbd>R</kbd> call for ball<br>
+  <kbd>F</kbd> kick &nbsp; <kbd>E</kbd> tackle &nbsp; <kbd>Shift</kbd> sprint<br>
+  <kbd>V</kbd> camera &nbsp; <kbd>Space</kbd> jump<br>
+  <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> / <kbd>C</kbd> switch class
+</div>
+<div id="cross" class="hud" hidden></div>
+<div id="charge" class="hud" hidden><span id="chargelab">Ball</span><div class="bar"><i id="chargebar"></i></div></div>
+<div id="hurt" class="hud"></div>
+<div id="down" class="hud" hidden><span id="downtxt">Knocked down</span><div class="bar"><i id="downbar"></i></div></div>
+<div id="banner" class="hud" hidden></div>
+<div id="toast" class="hud" hidden></div>
+<div id="pause" hidden>Click to grab the mouse</div>
+
+<div id="menu">
+  <div class="card">
+    <h1><span>Steel</span><span>hoops</span></h1>
+    <p>Five-a-side armoured ball, first person. Carry it, throw it, kick it, flatten whoever has it. Score through the hoop at the enemy end: 2 points, 3 from behind the arc. Jump absurdly high and dunk. Open bots fill every empty slot.</p>
+    <div class="teams"><span class="a">Ironclads</span><span class="b">Voltage</span></div>
+    <fieldset class="classes" id="classes"></fieldset>
+    <form class="row" id="joinform">
+      <input id="nm" maxlength="16" placeholder="Your name" autocomplete="off" aria-label="Your name">
+      <button id="go" type="submit">Enter arena</button>
+    </form>
+    <dl class="ctl">
+      <dt><kbd>W A S D</kbd></dt><dd>Move. <kbd>Shift</kbd> sprints, <kbd>Space</kbd> jumps very high</dd>
+      <dt><kbd>Mouse</kbd></dt><dd>Look. Arrow keys also turn</dd>
+      <dt><kbd>LMB</kbd></dt><dd>Holding the ball: hold and release to throw. Facing the hoop it arcs in as a shot; release near 60% charge for the best accuracy. Carry it over the rim mid-jump to dunk. Otherwise: kick</dd>
+      <dt><kbd>Q</kbd></dt><dd>Pass to the teammate nearest your aim</dd>
+      <dt><kbd>R</kbd></dt><dd>Call for the ball. A bot teammate carrying it passes to you</dd>
+      <dt><kbd>F</kbd> / <kbd>RMB</kbd></dt><dd>Kick, or punt if you hold the ball</dd>
+      <dt><kbd>E</kbd></dt><dd>Tackle lunge. Knocks the ball loose</dd>
+      <dt><kbd>V</kbd></dt><dd>Switch first / third person</dd>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Switch to Bruiser, Midfield man or Striker mid-match. <kbd>C</kbd> cycles</dd>
+    </dl>
+    <div class="note" id="mpnote">Entering starts an online game and adds its code to the address bar. Send friends that full link and they join your match. Needs keyboard and mouse.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(() => {
+"use strict";
+// ---------- constants ----------
+const L = 56, W = 34, HL = L / 2, HW = W / 2, GW = 4, GH = 3.6, BR = 0.28, G = 18, MATCH = 240;
+const TEAMS = [{ name: "Ironclads", col: 0xff7a1a, css: "#ff7a1a" }, { name: "Voltage", col: 0x2fd6ff, css: "#2fd6ff" }];
+const SPAWN = [[-25, 0], [-15, -7], [-15, 7], [-6, -4], [-6, 4]];
+const SLOT_ORDER = [1, 2, 3, 4, 0];
+// guard: tackle reach added against this class (negative = harder to strip); stunTake: multiplier on stun received
+const CLASSES = [
+  { id: "bruiser", name: "Bruiser", blurb: "Slowest on the pitch and nearly impossible to knock down. Huge tackles that flatten anyone, ball or not. Can barely shoot or pass.",
+    run: 5.2, sprint: 7.4, reach: 3.6, lunge: 17, lungeT: 0.32, stunDeal: 2.2, tcd: 0.8, thMin: 10, thMax: 22, kick: 16, pass: 15,
+    drain: 0.42, catch: 0.95, guard: -1.0, stunTake: 0.4, jump: 10, bars: [1, 5, 1, 1, 2, 5, 2] },
+  { id: "midfield", name: "Midfield man", blurb: "The engine. Endless stamina, safe hands and fast, accurate passes. Average shot and tackle.",
+    run: 7, sprint: 10.2, reach: 2.6, lunge: 14, lungeT: 0.22, stunDeal: 1.1, tcd: 1.0, thMin: 14, thMax: 32, kick: 21, pass: 26,
+    drain: 0.15, catch: 1.4, guard: 0, stunTake: 1, jump: 12.5, bars: [3, 3, 3, 5, 5, 3, 4] },
+  { id: "striker", name: "Striker", blurb: "Fastest player and deadliest shot. Can't tackle at all, and goes down at the slightest touch.",
+    run: 8.9, sprint: 13, reach: 1.7, lunge: 12, lungeT: 0.16, stunDeal: 0.5, tcd: 1.6, thMin: 20, thMax: 46, kick: 29, pass: 19,
+    drain: 0.38, catch: 1.2, guard: 0.9, stunTake: 1.7, jump: 14.5, bars: [5, 0, 5, 3, 2, 1, 5] },
+];
+const STAT_NAMES = ["Speed", "Tackle", "Shooting", "Passing", "Stamina", "Toughness", "Jump"];
+// keeper tuning: dive speed, catch reach (m), catch height (m), shot speed that forces a parry
+const KEEP = { dive: 6.0, reach: 1.15, height: 2.6, parry: 24 };
+// hoops: rim height/radius, rim and backboard distance from centre, three-point radius, player gravity (floaty)
+const RIM_Y = 4.2, RIM_R = 0.6, HOOP_X = HL - 1.7, BOARD_X = HL - 0.95, R3 = 10.5, PG = 11;
+const hoopOf = t => ({ x: dirOf(t) * HOOP_X, z: 0 }); // the hoop team t attacks
+function arc(o, t, ft) { return [(t[0] - o[0]) / ft, (t[1] - o[1]) / ft + 0.5 * G * ft, (t[2] - o[2]) / ft]; }
+function shotTime(o, t) { return clamp(0.55 + Math.hypot(t[0] - o[0], t[2] - o[2]) * 0.055, 0.6, 1.5); }
+const SHOT_ERR = { bruiser: 0.9, midfield: 0.42, striker: 0.2 };
+const SLOT_CLS = [0, 0, 1, 2, 1]; // keeper, back, mid, forward, mid
+const teamOf = gs => (gs < 5 ? 0 : 1);
+const dirOf = t => (t === 0 ? 1 : -1);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const r2 = v => Math.round(v * 100) / 100;
+const fin = (v, d = 0) => (Number.isFinite(v) ? v : d);
+const fwd = yaw => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
+const yawTo = (dx, dz) => Math.atan2(-dx, -dz);
+function spawn(gs) {
+  const [x, z] = SPAWN[gs % 5];
+  return teamOf(gs) === 0 ? { x, z, yaw: -Math.PI / 2 } : { x: -x, z: -z, yaw: Math.PI / 2 };
+}
+function lob(o, t, speed) {
+  const dx = t[0] - o[0], dy = t[1] - o[1], dz = t[2] - o[2];
+  const tt = Math.max(0.2, Math.hypot(dx, dz) / speed);
+  return [dx / tt, dy / tt + 0.5 * G * tt, dz / tt];
+}
+function vec3(a, lim) { return Array.isArray(a) && a.length === 3 && a.every(Number.isFinite) ? a.map(v => clamp(v, -lim, lim)) : null; }
+
+// ---------- state ----------
+const world = {
+  ball: { x: 0, y: 0.5, z: 0, vx: 0, vy: 13, vz: 0, h: -1 },
+  np: { gs: -1, t: 0 }, pass: { to: -1, t: 0 }, bots: [], sc: [0, 0], tm: MATCH, ph: "play", endT: 0, k: 0, lg: -1,
+  tk: new Array(10).fill(0), sd: new Array(10).fill(1), koT: 0, lt: null, lp: 2, slamT: 0,
+};
+for (let i = 0; i < 10; i++) {
+  const s = spawn(i);
+  world.bots.push({ x: s.x, z: s.z, y: 0, yaw: s.yaw, vx: 0, vz: 0, stun: 0, tcd: 0, think: Math.random(), hold: 0, call: -1, tx: s.x, tz: s.z, tyaw: s.yaw, st: 0, vy: 0, ty: 0 });
+}
+const me = {
+  playing: false, name: "", gs: 1, j: 0, cls: 1, x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: -Math.PI / 2, pitch: 0,
+  stun: 0, stam: 1, charge: 0, charging: false, tackleT: 0, tackleCd: 0, actN: 0, act: null,
+  tkSeen: 0, kSeen: -1, view: "fp", relT: 0,
+};
+
+let room = null, myPeer = null, peers = [], hostPeer = null, lastHostH = null, connected = false;
+let humans = {};            // gs -> {peer, name, j}
+const rrend = {};           // peer -> render state
+const lastN = {};           // peer -> last action counter seen
+const actQ = [];
+
+const isHuman = i => (me.playing && me.gs === i) || !!humans[i];
+const isHost = () => hostPeer === null || hostPeer === myPeer;
+function clsOf(i) {
+  if (me.playing && me.gs === i) return CLASSES[me.cls];
+  if (humans[i]) return CLASSES[humans[i].c];
+  return CLASSES[SLOT_CLS[i % 5]];
+}
+function posOf(i) {
+  if (me.playing && me.gs === i) return me;
+  const h = humans[i];
+  if (h && rrend[h.peer]) return rrend[h.peer];
+  return world.bots[i];
+}
+function stunned(i) { return (me.playing && me.gs === i) ? me.stun > 0 : world.bots[i].stun > 0; }
+
+// ---------- networking (room capability) ----------
+function rebuild() {
+  const nh = {};
+  const cands = [];
+  if (me.playing && myPeer) cands.push(myPeer);
+  for (const p of peers) {
+    if (p.sameTab) continue;
+    const pr = p.presence || {};
+    if (pr.v !== 1) continue;
+    const gs = pr.s;
+    if (!Number.isInteger(gs) || gs < 0 || gs > 9) continue;
+    cands.push(p.peer);
+    const j = fin(pr.j, 0);
+    const name = typeof pr.n === "string" ? pr.n.slice(0, 16) : "Player";
+    const c = Number.isInteger(pr.c) && pr.c >= 0 && pr.c < CLASSES.length ? pr.c : SLOT_CLS[gs % 5];
+    if (!nh[gs] || j < nh[gs].j) nh[gs] = { peer: p.peer, name, j, c };
+    const pp = pr.p;
+    let r = rrend[p.peer];
+    if (Array.isArray(pp) && pp.length >= 4 && pp.every(Number.isFinite)) {
+      if (!r) r = rrend[p.peer] = { x: pp[0], y: pp[1], z: pp[2], yaw: pp[3], tx: pp[0], ty: pp[1], tz: pp[2], tyaw: pp[3] };
+      r.tx = clamp(pp[0], -HL, HL); r.ty = clamp(pp[1], 0, 5); r.tz = clamp(pp[2], -HW, HW); r.tyaw = pp[3];
+    } else if (!r) {
+      const s = spawn(gs);
+      rrend[p.peer] = { x: s.x, y: 0, z: s.z, yaw: s.yaw, tx: s.x, ty: 0, tz: s.z, tyaw: s.yaw };
+    }
+    const a = pr.a;
+    if (a && Number.isFinite(a.n)) {
+      if (lastN[p.peer] === undefined) lastN[p.peer] = a.n;
+      else if (a.n > lastN[p.peer]) { lastN[p.peer] = a.n; actQ.push([gs, a]); }
+    }
+  }
+  humans = nh;
+  hostPeer = cands.length ? cands.reduce((m, c) => (c < m ? c : m)) : null;
+
+  // slot clash: the later joiner moves
+  if (me.playing && humans[me.gs]) {
+    const o = humans[me.gs];
+    if (o.j < me.j || (o.j === me.j && myPeer && o.peer < myPeer)) pickSlot(true);
+  }
+  if (hostPeer && hostPeer !== myPeer) {
+    const hp = peers.find(p => p.peer === hostPeer);
+    const h = hp && hp.presence && hp.presence.h;
+    if (h && h !== lastHostH) { lastHostH = h; applyHost(h); }
+  }
+  renderRoster(cands.length);
+}
+
+function applyHost(h) {
+  const b = world.ball;
+  if (Array.isArray(h.b) && h.b.length === 6 && h.b.every(Number.isFinite)) {
+    const bh = Number.isInteger(h.bh) ? clamp(h.bh, -1, 9) : -1;
+    if (!(me.relT > 0 && bh === me.gs)) {
+      [b.x, b.y, b.z, b.vx, b.vy, b.vz] = h.b;
+      b.h = bh;
+    }
+  }
+  if (Array.isArray(h.bt)) h.bt.slice(0, 10).forEach((e, i) => {
+    if (!Array.isArray(e)) return;
+    const o = world.bots[i];
+    o.tx = fin(e[0], o.tx); o.tz = fin(e[1], o.tz); o.tyaw = fin(e[2], o.tyaw); o.st = e[3] ? 1 : 0; o.ty = clamp(fin(e[4], 0), 0, 12);
+  });
+  if (Array.isArray(h.sc)) world.sc = [fin(h.sc[0]) | 0, fin(h.sc[1]) | 0];
+  world.tm = fin(h.tm, world.tm);
+  world.ph = h.ph === "end" ? "end" : "play";
+  world.lp = h.lp === 0 || h.lp === 3 ? h.lp : 2;
+  if (Number.isInteger(h.k)) world.k = h.k;
+  world.lg = Number.isInteger(h.lg) ? h.lg : -1;
+  if (Array.isArray(h.tk)) world.tk = world.tk.map((v, i) => fin(h.tk[i], v));
+  world.pass = Number.isInteger(h.ps) && h.ps >= 0 ? { to: h.ps, t: 0.5 } : { to: -1, t: 0 };
+  if (Array.isArray(h.sd)) world.sd = world.sd.map((v, i) => clamp(fin(h.sd[i], v), 0.2, 3));
+}
+
+function packHost() {
+  const b = world.ball;
+  return {
+    b: [b.x, b.y, b.z, b.vx, b.vy, b.vz].map(r2), bh: b.h,
+    bt: world.bots.map(o => [r2(o.x), r2(o.z), r2(o.yaw), o.stun > 0 ? 1 : 0, r2(o.y)]), lp: world.lp,
+    sc: world.sc, tm: Math.round(world.tm * 10) / 10, ph: world.ph, k: world.k, lg: world.lg, tk: world.tk, sd: world.sd, ps: world.pass.t > 0 ? world.pass.to : -1,
+  };
+}
+
+let pubT = 0, sentNullH = false;
+function publish(dt) {
+  if (!room || !me.playing) return;
+  pubT -= dt;
+  if (pubT > 0) return;
+  pubT = 1 / 30;
+  const patch = { v: 1, n: me.name, s: me.gs, c: me.cls, j: me.j, p: [r2(me.x), r2(me.y), r2(me.z), r2(me.yaw)], a: me.act };
+  if (isHost()) { patch.h = packHost(); sentNullH = false; }
+  else if (!sentNullH) { patch.h = null; sentNullH = true; }
+  room.presence(patch).catch(() => {});
+}
+
+// PeerJS (WebRTC) transport shaped like the room API the game was written against:
+// the first browser with a game code hosts and relays everyone's state; the rest connect to it.
+let netCode = "";
+const CODE_RE = /^[A-Z0-9]{4,8}$/;
+const hashCode = () => { const c = decodeURIComponent(location.hash.slice(1)).toUpperCase(); return CODE_RE.test(c) ? c : ""; };
+function newCode() { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = ""; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
+
+function createNet(code, hosting) {
+  return new Promise(resolve => {
+    if (typeof Peer !== "function") { resolve({ error: "no-peerjs" }); return; }
+    let self = hosting ? "0-host" : "";
+    const pres = {}, mine = {}, conns = new Map();
+    let hostConn = null, isConnected = false, peersCb = null, errCb = null, connCb = null, dirty = true, settled = false, timer = 0;
+    const merge = (o, p) => { for (const k in p) { if (p[k] === null) delete o[k]; else o[k] = p[k]; } };
+    const emitPeers = () => {
+      if (!peersCb || !self) return;
+      pres[self] = mine;
+      const list = Object.keys(pres).map(l => ({ peer: l, presence: pres[l] || {}, sameTab: l === self, isMe: l === self, by: null, kind: "viewer", guest: false }));
+      peersCb({ peers: list, joined: [], left: [], updated: [] });
+    };
+    const setConn = c => { if (c !== isConnected) { isConnected = c; if (connCb) connCb(c); } };
+    const finish = v => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
+    const lost = why => { setConn(false); if (errCb) errCb({ code: "upstream_error", message: why }); };
+    const api = {
+      onPeers(fn, onErr) { peersCb = fn; errCb = onErr; setTimeout(emitPeers, 0); return () => { peersCb = null; }; },
+      onConnection(fn) { connCb = fn; setTimeout(() => fn(isConnected), 0); return () => { connCb = null; }; },
+      connected: () => isConnected,
+      presence(patch) {
+        merge(mine, patch);
+        if (!hosting && hostConn && hostConn.open) hostConn.send({ t: "p", d: patch });
+        dirty = true;
+        return Promise.resolve();
+      },
+    };
+    const peer = new Peer(hosting ? "steelhoops-" + code : undefined, { debug: 0 });
+    timer = setTimeout(() => { finish({ error: "timeout" }); try { peer.destroy(); } catch (e) {} }, 12000);
+    peer.on("error", e => {
+      const type = (e && e.type) || "error";
+      if (!settled) { finish({ error: type }); try { peer.destroy(); } catch (e2) {} }
+      else if (!hosting && type !== "peer-unavailable") lost(type);
+    });
+    peer.on("disconnected", () => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} });
+    if (hosting) {
+      peer.on("open", () => { setConn(true); finish(api); });
+      peer.on("connection", conn => {
+        const label = "1-" + conn.peer.slice(0, 12);
+        conn.on("open", () => { conns.set(conn.peer, conn); pres[label] = pres[label] || {}; dirty = true; });
+        conn.on("data", m => {
+          if (!m || m.t !== "p" || !m.d || typeof m.d !== "object" || Array.isArray(m.d)) return;
+          merge(pres[label] = pres[label] || {}, m.d); dirty = true;
+        });
+        const drop = () => { conns.delete(conn.peer); delete pres[label]; dirty = true; };
+        conn.on("close", drop); conn.on("error", drop);
+      });
+      setInterval(() => {
+        if (!dirty) return;
+        dirty = false;
+        pres[self] = mine;
+        const msg = { t: "s", d: pres };
+        for (const c of conns.values()) if (c.open) c.send(msg);
+        emitPeers();
+      }, 1000 / 30);
+    } else {
+      peer.on("open", id => {
+        self = "1-" + id.slice(0, 12);
+        hostConn = peer.connect("steelhoops-" + code, { serialization: "json" });
+        hostConn.on("open", () => { setConn(true); hostConn.send({ t: "p", d: mine }); finish(api); });
+        hostConn.on("data", m => {
+          if (!m || m.t !== "s" || !m.d || typeof m.d !== "object") return;
+          for (const k of Object.keys(pres)) delete pres[k];
+          Object.assign(pres, m.d);
+          emitPeers();
+        });
+        hostConn.on("close", () => lost("host left"));
+      });
+    }
+  });
+}
+
+let netBusy = false;
+async function startNet() {
+  if (netBusy || room) return;
+  netBusy = true;
+  let code = hashCode(), hosting = !code;
+  if (hosting) code = newCode();
+  $("netline").textContent = hosting ? "Opening a game…" : `Joining game ${code}…`;
+  let r = await createNet(code, hosting);
+  // a link whose host has gone: take the game over under the same code, so the link keeps working
+  if (r.error === "peer-unavailable" && !hosting) { hosting = true; r = await createNet(code, true); }
+  else if (r.error === "unavailable-id" && hosting) { hosting = false; r = await createNet(code, false); }
+  netBusy = false;
+  if (r.error) {
+    room = null; netCode = ""; setNet();
+    toast("Couldn't go online · playing with bots");
+    return;
+  }
+  netCode = code;
+  history.replaceState(null, "", "#" + code);
+  room = r;
+  rosterKey = "";
+  r.onPeers(ch => { peers = ch.peers; const mine = peers.find(p => p.sameTab); if (mine) myPeer = mine.peer; rebuild(); },
+    () => { room = null; peers = []; humans = {}; hostPeer = null; netCode = ""; setNet(); toast("Host left · playing with bots"); });
+  r.onConnection(c => { connected = c; setNet(); });
+}
+
+// ---------- game rules (authoritative on the host) ----------
+function kickoff() {
+  const b = world.ball;
+  Object.assign(b, { x: 0, y: 0.5, z: 0, vx: (Math.random() - 0.5) * 6, vy: 15, vz: (Math.random() - 0.5) * 8, h: -1 });
+  world.np = { gs: -1, t: 0 }; world.pass = { to: -1, t: 0 };
+  world.k++;
+  world.bots.forEach((o, i) => { const s = spawn(i); Object.assign(o, { x: s.x, z: s.z, y: 0, vy: 0, yaw: s.yaw, vx: 0, vz: 0, stun: 0, hold: 0 }); });
+  world.koT = 0; world.lt = null;
+}
+// points go to the team attacking that hoop; 3 if their last throw came from behind the arc; dunks are 2
+function basket(team, hx) {
+  const lt = world.lt, ours = lt && lt.t === team;
+  const dunk = !!(ours && lt.dunk), three = ours && !dunk && Math.hypot(lt.x - hx, lt.z) > R3;
+  world.sc[team] += three ? 3 : 2; world.lg = team; world.lp = dunk ? 0 : three ? 3 : 2;
+  world.koT = 1.1; world.lt = null;
+}
+
+function applyAct(gs, a) {
+  const b = world.ball;
+  const o = vec3(a.o, 60), v = vec3(a.v, 50);
+  if (!o) return;
+  if (a.t === "th") {
+    if (b.h !== gs || !v) return;
+    Object.assign(b, { h: -1, x: clamp(o[0], -HL + BR, HL - BR), y: clamp(o[1], BR, 6), z: clamp(o[2], -HW + BR, HW - BR), vx: v[0], vy: v[1], vz: v[2] });
+    world.np = { gs, t: 0.35 };
+    world.lt = { t: teamOf(gs), x: o[0], z: o[2] };
+    const r = a.r;
+    world.pass = Number.isInteger(r) && r >= 0 && r < 10 && r !== gs && teamOf(r) === teamOf(gs) ? { to: r, t: 2.2 } : { to: -1, t: 0 };
+  } else if (a.t === "cl") {
+    if (b.h >= 0 && b.h !== gs && teamOf(b.h) === teamOf(gs) && !isHuman(b.h)) {
+      const c = world.bots[b.h]; c.call = gs; c.think = Math.min(c.think, 0.15);
+    }
+  } else if (a.t === "kk") {
+    if (!v) return;
+    if (b.h === gs) Object.assign(b, { h: -1, x: clamp(o[0], -HL + BR, HL - BR), y: clamp(o[1], BR, 4), z: clamp(o[2], -HW + BR, HW - BR) });
+    else if (!(b.h < 0 && Math.hypot(o[0] - b.x, o[2] - b.z) < 2.4 && b.y < 2.6)) return;
+    b.vx = v[0]; b.vy = v[1]; b.vz = v[2];
+    world.np = { gs, t: 0.25 };
+    world.lt = { t: teamOf(gs), x: o[0], z: o[2] };
+  } else if (a.t === "tk") {
+    const A = clsOf(gs);
+    if (A.id === "striker") return; // strikers can't tackle
+    let victim = -1;
+    if (b.h >= 0 && teamOf(b.h) !== teamOf(gs)) {
+      const p = posOf(b.h);
+      if (Math.hypot(p.x - o[0], p.z - o[2]) <= A.reach + clsOf(b.h).guard) victim = b.h;
+    }
+    if (victim < 0 && A.id === "bruiser") {
+      // bruisers flatten whoever is in reach, ball or not
+      let bd = A.reach - 0.6;
+      for (let j = 0; j < 10; j++) {
+        if (teamOf(j) === teamOf(gs) || stunned(j)) continue;
+        const p = posOf(j), d = Math.hypot(p.x - o[0], p.z - o[2]);
+        if (d < bd) { bd = d; victim = j; }
+      }
+    }
+    if (victim < 0) return;
+    if ((posOf(victim).y || 0) > 0.8) return; // can't tackle someone who's up in the air
+    const stun = A.stunDeal * clsOf(victim).stunTake;
+    if (b.h === victim) {
+      const pop = A.id === "bruiser" ? 12 : 7;
+      Object.assign(b, { h: -1, y: 1.2, vy: 6, vx: (Math.random() - 0.5) * pop, vz: (Math.random() - 0.5) * pop });
+      world.np = { gs: victim, t: 0.8 };
+    }
+    const vb = world.bots[victim], p = posOf(victim), ex = p.x - o[0], ez = p.z - o[2], el = Math.hypot(ex, ez) || 1;
+    vb.stun = stun; vb.vx = ex / el * stun * 5; vb.vz = ez / el * stun * 5;
+    world.sd[victim] = Math.round(stun * 10) / 10;
+    world.tk[victim]++;
+  }
+}
+
+function ballStep(dt, auth) {
+  const b = world.ball;
+  if (world.np.t > 0) world.np.t -= dt;
+  if (world.pass.t > 0) world.pass.t -= dt;
+  if (world.slamT > 0) world.slamT -= dt;
+  if (b.h >= 0) {
+    if (b.h === me.gs && me.playing && me.relT > 0) { b.h = -1; }
+    else {
+      const p = posOf(b.h), f = fwd(p.yaw);
+      b.x = p.x + f.x * 0.55; b.z = p.z + f.z * 0.55; b.y = (p.y || 0) + 1.15; b.vx = b.vy = b.vz = 0;
+      // carried over the rim mid-jump: slam it down through the hoop
+      const hp = hoopOf(teamOf(b.h));
+      if (auth && world.ph === "play" && world.koT <= 0 && Math.hypot(b.x - hp.x, b.z - hp.z) < 1.1 && b.y > RIM_Y + 0.1) {
+        world.lt = { t: teamOf(b.h), x: hp.x, z: hp.z, dunk: true };
+        world.np = { gs: b.h, t: 0.6 };
+        Object.assign(b, { h: -1, x: hp.x, z: hp.z, y: Math.max(b.y, RIM_Y + 0.35), vx: 0, vz: 0, vy: -7 });
+        world.slamT = 0.5;
+      }
+      return;
+    }
+  }
+  const n = 3, h = dt / n;
+  for (let s = 0; s < n; s++) {
+    const py = b.y, pxAbs = Math.abs(b.x);
+    b.vy -= G * h;
+    b.x += b.vx * h; b.y += b.vy * h; b.z += b.vz * h;
+    if (b.y < BR) {
+      b.y = BR;
+      if (b.vy < -1.5) b.vy = -b.vy * 0.6; else b.vy = 0;
+      const fr = 1 - 1.4 * h; b.vx *= fr; b.vz *= fr;
+    }
+    if (b.y > 16) { b.y = 16; b.vy = -Math.abs(b.vy) * 0.5; }
+    if (Math.abs(b.z) > HW - BR && Math.abs(b.x) <= HL) { b.z = Math.sign(b.z) * (HW - BR); b.vz = -b.vz * 0.8; }
+    if (Math.abs(b.x) > HL - BR) { b.x = Math.sign(b.x) * (HL - BR); b.vx = -b.vx * 0.8; }
+    for (const sx of [-1, 1]) {
+      const hx = sx * HOOP_X;
+      // backboard (only from the court side)
+      if (Math.abs(b.z) < 1.8 && b.y > RIM_Y - 0.4 && b.y < RIM_Y + 1.95 && sx * b.x > BOARD_X - BR && pxAbs <= BOARD_X - BR + 0.02 && Math.sign(b.x) === sx) {
+        b.x = sx * (BOARD_X - BR); b.vx = -b.vx * 0.55;
+      }
+      // rim: bounce off the nearest point of the ring
+      const dx = b.x - hx, dz = b.z, rh = Math.hypot(dx, dz);
+      const nx = rh > 1e-4 ? b.x - (hx + dx / rh * RIM_R) : RIM_R, ny = b.y - RIM_Y, nz = rh > 1e-4 ? b.z - dz / rh * RIM_R : 0, nd = Math.hypot(nx, ny, nz);
+      if (nd < BR + 0.05 && nd > 1e-6) {
+        const ux = nx / nd, uy = ny / nd, uz = nz / nd, push = BR + 0.05 - nd;
+        b.x += ux * push; b.y += uy * push; b.z += uz * push;
+        const vn = b.vx * ux + b.vy * uy + b.vz * uz;
+        if (vn < 0) { b.vx -= 1.55 * vn * ux; b.vy -= 1.55 * vn * uy; b.vz -= 1.55 * vn * uz; }
+      }
+      // down through the hoop
+      if (py > RIM_Y && b.y <= RIM_Y && Math.hypot(b.x - hx, b.z) < RIM_R - 0.06 && world.koT <= 0) {
+        if (auth && world.ph === "play") basket(sx > 0 ? 0 : 1, hx);
+        b.vx *= 0.3; b.vz *= 0.3;
+      }
+    }
+  }
+  if (auth && world.ph === "play" && world.koT <= 0) {
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < 10; i++) {
+      if (world.np.t > 0 && world.np.gs === i) continue;
+      if (stunned(i)) continue;
+      const target = world.pass.t > 0 && world.pass.to === i; // intended receiver gets a bigger catch zone
+      const p = posOf(i), d = Math.hypot(p.x - b.x, p.z - b.z), hy = b.y - (p.y || 0);
+      if (world.slamT > 0 || (b.y > RIM_Y - 0.4 && Math.abs(Math.abs(b.x) - HOOP_X) < 1.3 && Math.abs(b.z) < 1.3)) continue; // goaltending
+      // a keeper in their own goal area can stretch and dive: wider and higher reach
+      const keeper = i % 5 === 0 && Math.abs(p.x + dirOf(teamOf(i)) * HL) < 5;
+      if (keeper && d < KEEP.reach && hy < KEEP.height && hy > -0.7) {
+        const sp = Math.hypot(b.vx, b.vy, b.vz);
+        if (sp > KEEP.parry) { // too hot to hold: parry it back into play
+          b.vx = -b.vx * 0.35; b.vy = Math.abs(b.vy) * 0.4 + 4; b.vz = b.vz * 0.4 + (Math.random() - 0.5) * 10;
+          world.np = { gs: i, t: 0.35 };
+          continue;
+        }
+        const dn = d + Math.random() * 0.3;
+        if (dn < bd) { bd = dn; best = i; }
+        continue;
+      }
+      const reach = clsOf(i).catch + (target ? 0.9 : 0), dn = d + Math.random() * 0.3;
+      if (hy < (target ? 3 : 2.4) && hy > -0.7 && d < reach && dn < bd) { bd = dn; best = i; }
+    }
+    if (best >= 0) { b.h = best; Object.assign(world.bots[best], { hold: 0, think: 0.35, call: -1 }); world.pass = { to: -1, t: 0 }; }
+  }
+}
+
+function nearestOpp(i) {
+  const p = posOf(i); let d = 1e9;
+  for (let j = 0; j < 10; j++) if (teamOf(j) !== teamOf(i)) { const q = posOf(j); d = Math.min(d, Math.hypot(q.x - p.x, q.z - p.z)); }
+  return d;
+}
+function botShoot(i) {
+  const o = world.bots[i], t = teamOf(i), f = fwd(o.yaw), err = SHOT_ERR[clsOf(i).id], hp = hoopOf(t);
+  const org = [o.x + f.x * 0.6, (o.y || 0) + 1.6, o.z + f.z * 0.6];
+  const tgt = [hp.x + (Math.random() - 0.5) * 2 * err, RIM_Y + 0.05, hp.z + (Math.random() - 0.5) * 2 * err];
+  applyAct(i, { t: "th", o: org, v: arc(org, tgt, shotTime(org, tgt)) });
+}
+function velOf(j) {
+  if (me.playing && me.gs === j) return { x: me.vx, z: me.vz };
+  const h = humans[j], r = h && rrend[h.peer];
+  if (r) return { x: r.vx || 0, z: r.vz || 0 };
+  return { x: world.bots[j].vx, z: world.bots[j].vz };
+}
+// prefer: a teammate who called for the ball; forwardOnly: only look for a clearly advanced receiver
+function botPass(i, prefer = -1, forwardOnly = false) {
+  const o = world.bots[i], t = teamOf(i), dir = dirOf(t);
+  let best = -1, bs = -1e9;
+  for (let j = t * 5; j < t * 5 + 5; j++) {
+    if (j === i || stunned(j)) continue;
+    const p = posOf(j), ahead = dir * (p.x - o.x), d = Math.hypot(p.x - o.x, p.z - o.z);
+    if (j !== prefer && (ahead < (forwardOnly ? 4 : -6) || d < 4 || d > 30)) continue;
+    if (j === prefer && (d < 2 || d > 42)) continue;
+    let open = 1e9;
+    for (let k = 0; k < 10; k++) if (teamOf(k) !== t) { const q = posOf(k); open = Math.min(open, Math.hypot(q.x - p.x, q.z - p.z)); }
+    const s = ahead * 0.6 - Math.abs(d - 14) * 0.3 + Math.min(open, 7) * 0.7 + (isHuman(j) ? 4 : 0) + (j === prefer ? 100 : 0) + Math.random() * 3;
+    if (s > bs) { bs = s; best = j; }
+  }
+  if (best < 0) return false;
+  const p = posOf(best), v = velOf(best), f = fwd(o.yaw);
+  const org = [o.x + f.x * 0.6, 1.4, o.z + f.z * 0.6];
+  const ps = clsOf(i).pass, lead = Math.hypot(p.x - o.x, p.z - o.z) / ps * 0.85;
+  const wob = clsOf(i).id === "bruiser" ? 2.5 : 0; // bruisers spray their passes
+  const tgt = [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)];
+  applyAct(i, { t: "th", o: org, v: lob(org, tgt, ps), r: best });
+  return true;
+}
+
+function botsAI(dt) {
+  const b = world.ball;
+  let tgt;
+  if (b.h >= 0) tgt = posOf(b.h);
+  else {
+    const tl = b.y > 1.6 ? (b.vy + Math.sqrt(Math.max(0, b.vy * b.vy + 2 * G * (b.y - 1.2)))) / G : 0.25;
+    tgt = { x: clamp(b.x + b.vx * tl, -HL + 1, HL - 1), z: clamp(b.z + b.vz * tl, -HW + 1, HW - 1) };
+  }
+  const chaser = [-1, -1];
+  for (const t of [0, 1]) {
+    if (b.h >= 0 && teamOf(b.h) === t) continue;
+    let bd = 1e9;
+    for (let i = t * 5 + 1; i < t * 5 + 5; i++) {
+      if (isHuman(i)) continue;
+      const p = world.bots[i], d = Math.hypot(p.x - tgt.x, p.z - tgt.z);
+      if (d < bd) { bd = d; chaser[t] = i; }
+    }
+  }
+  const order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+  for (const i of order) {
+    if (isHuman(i)) continue;
+    const o = world.bots[i], t = teamOf(i), dir = dirOf(t), slot = i % 5, sp = spawn(i), C = clsOf(i);
+    const own = -dir * HL, opp = dir * HL;
+    o.tcd -= dt; o.think -= dt;
+    let tx = sp.x, tz = sp.z, speed = C.run * 0.88;
+    if (o.stun > 0) { o.stun -= dt; tx = o.x; tz = o.z; speed = 0; }
+    else if (world.ph !== "play") { tx = sp.x; tz = sp.z; speed = 3; }
+    else if (b.h === i) {
+      o.hold += dt; speed = C.run * 0.95;
+      const hp = hoopOf(t), dh = Math.hypot(hp.x - o.x, hp.z - o.z), range = { bruiser: 0, midfield: 12, striker: 16 }[C.id];
+      tx = hp.x - dir * 0.6; tz = hp.z;
+      if (o.call >= 0 && o.think <= 0) {
+        // a human teammate called for it: pass unless we're about to score
+        const caller = o.call; o.call = -1; o.think = 0.4;
+        if (dh > 5) botPass(i, caller);
+      } else if (slot === 0) { if (o.hold > 0.7 && o.think <= 0) { o.think = 0.4; botPass(i); } }
+      else if (o.think <= 0 && o.y <= 0) {
+        o.think = 0.3 + Math.random() * 0.35;
+        if (dh > 6 && dh < range && Math.random() < (dh < 9 ? 0.35 : 0.6)) botShoot(i); // inside 6 m: drive and dunk
+        else if (nearestOpp(i) < 3.2 && Math.random() < 0.5) botPass(i);
+        else if (o.hold > 1.2 && dh > 8 && Math.random() < 0.3) botPass(i, -1, true);
+      }
+    } else if (slot === 0) {
+      // rim protector: sits in front of their own hoop and goes up for anything near it
+      speed = Math.max(C.run, 7.2);
+      const oh = hoopOf(1 - t), bp = b.h >= 0 ? posOf(b.h) : b;
+      tx = oh.x + dir * 2.2; tz = clamp(bp.z * 0.3, -3, 3);
+      if (b.h < 0 && Math.hypot(b.x - oh.x, b.z - oh.z) < 9) {
+        const tl = b.y > 1.6 ? (b.vy + Math.sqrt(Math.max(0, b.vy * b.vy + 2 * G * (b.y - 1.2)))) / G : 0.25;
+        tx = b.x + b.vx * tl; tz = b.z + b.vz * tl; speed = KEEP.dive;
+      } else if (b.h >= 0 && teamOf(b.h) !== t && Math.hypot(bp.x - oh.x, bp.z - oh.z) < 6) { tx = bp.x; tz = bp.z; }
+    } else if (b.h >= 0 && teamOf(b.h) === t) {
+      const c = posOf(b.h);
+      tx = clamp(c.x + dir * (5 + slot * 1.6), -HL + 3, HL - 3); tz = sp.z * 1.7;
+    } else if (chaser[t] === i) {
+      tx = tgt.x; tz = tgt.z; speed = C.run;
+      if (b.h >= 0 && C.id !== "striker" && o.tcd <= 0 && Math.hypot(tgt.x - o.x, tgt.z - o.z) < C.reach * 0.7) { applyAct(i, { t: "tk", o: [o.x, 1, o.z] }); o.tcd = C.tcd + 2; }
+    } else {
+      const bx = b.h >= 0 ? posOf(b.h).x : b.x;
+      if (b.h >= 0) { tx = clamp((bx + own) / 2, -HL + 3, HL - 3); tz = sp.z * 1.2 + b.z * 0.3; }
+      else { tx = clamp(sp.x * 0.5 + bx * 0.6, -HL + 3, HL - 3); tz = sp.z * 1.5 + b.z * 0.25; }
+    }
+    // bruisers take a swing at any opponent who wanders close to the play
+    if (C.id === "bruiser" && o.stun <= 0 && o.tcd <= 0 && world.ph === "play" && b.h !== i) {
+      for (let j = 0; j < 10; j++) {
+        if (teamOf(j) === t || stunned(j)) continue;
+        const p = posOf(j);
+        if (Math.hypot(p.x - o.x, p.z - o.z) < 1.8 && Math.hypot(p.x - b.x, p.z - b.z) < 9) {
+          applyAct(i, { t: "tk", o: [o.x, 1, o.z] }); o.tcd = C.tcd + 3; break;
+        }
+      }
+    }
+    const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
+    const s = d > 0.4 ? Math.min(speed, d * 3) : 0;
+    const wx = d > 0.01 ? dx / d * s : 0, wz = d > 0.01 ? dz / d * s : 0;
+    const k = 1 - Math.exp(-(slot === 0 ? 13 : 6) * dt);
+    o.vx += (wx - o.vx) * k; o.vz += (wz - o.vz) * k;
+    for (let j = 0; j < 10; j++) {
+      if (j === i) continue;
+      const p = posOf(j), ex = o.x - p.x, ez = o.z - p.z, dd = Math.hypot(ex, ez);
+      if (dd > 0.001 && dd < 1.0) { o.x += ex / dd * (1.0 - dd) * 0.5; o.z += ez / dd * (1.0 - dd) * 0.5; }
+    }
+    o.x = clamp(o.x + o.vx * dt, -HL + 0.5, HL - 0.5);
+    o.z = clamp(o.z + o.vz * dt, -HW + 0.5, HW - 0.5);
+    // extreme jumps: dunks, rebounds, blocks
+    if (o.y <= 0 && o.stun <= 0 && world.ph === "play") {
+      let jump = false;
+      if (b.h === i) { const hp = hoopOf(t); jump = Math.hypot(hp.x - o.x, hp.z - o.z) < 3.2; }
+      else if (b.h < 0) { const dh = Math.hypot(b.x - o.x, b.z - o.z); jump = dh < 2.2 && b.y > 2.8 && b.y < 2.2 + C.jump * C.jump / (2 * PG) && b.vy < -1; }
+      else if (teamOf(b.h) !== t) { const c = posOf(b.h); jump = (c.y || 0) > 0.6 && Math.hypot(c.x - o.x, c.z - o.z) < 2.5; }
+      if (jump) o.vy = C.jump;
+    }
+    o.vy -= PG * dt; o.y += o.vy * dt;
+    if (o.y < 0) { o.y = 0; o.vy = 0; }
+    const sp2 = Math.hypot(o.vx, o.vz);
+    const wantYaw = b.h === i || sp2 > 1.2 ? yawTo(o.vx, o.vz) : yawTo(b.x - o.x, b.z - o.z);
+    let dy = wantYaw - o.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    o.yaw += dy * Math.min(1, dt * 10);
+  }
+}
+
+function hostStep(dt) {
+  for (const [gs, a] of actQ) applyAct(gs, a);
+  actQ.length = 0;
+  for (let i = 0; i < 10; i++) if (isHuman(i)) { const p = posOf(i), o = world.bots[i]; o.x = p.x; o.z = p.z; o.y = p.y || 0; o.yaw = p.yaw; o.vx = o.vz = 0; if (!(me.playing && me.gs === i) && o.stun > 0) o.stun -= dt; }
+  botsAI(dt);
+  ballStep(dt, true);
+  if (world.koT > 0) { world.koT -= dt; if (world.koT <= 0) kickoff(); }
+  if (world.ph === "play") {
+    world.tm -= dt;
+    if (world.tm <= 0) { world.tm = 0; world.ph = "end"; world.endT = 8; }
+  } else {
+    world.endT -= dt;
+    if (world.endT <= 0) { world.sc = [0, 0]; world.tm = MATCH; world.ph = "play"; world.lg = -1; kickoff(); }
+  }
+}
+function clientStep(dt) {
+  actQ.length = 0;
+  const k = 1 - Math.exp(-14 * dt);
+  for (let i = 0; i < 10; i++) {
+    const o = world.bots[i];
+    o.x += (o.tx - o.x) * k; o.z += (o.tz - o.z) * k; o.y += ((o.ty || 0) - o.y) * k;
+    let dy = o.tyaw - o.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); o.yaw += dy * k;
+    o.stun = o.st ? 0.1 : 0;
+  }
+  ballStep(dt, false);
+}
+
+// ---------- local player ----------
+const keys = new Set();
+let lmb = false, locked = false, lockFailed = false;
+function pickSlot(clash) {
+  const taken = new Set(Object.keys(humans).map(Number));
+  const counts = [0, 0];
+  for (const k of taken) counts[teamOf(k)]++;
+  const pref = counts[0] <= counts[1] ? [0, 1] : [1, 0];
+  let gs = -1;
+  for (const t of pref) { for (const s of SLOT_ORDER) { const c = t * 5 + s; if (!taken.has(c)) { gs = c; break; } } if (gs >= 0) break; }
+  if (gs < 0) gs = 1;
+  me.gs = gs;
+  const s = spawn(gs);
+  Object.assign(me, { x: s.x, z: s.z, y: 0, yaw: s.yaw, pitch: 0, vx: 0, vz: 0, vy: 0, tkSeen: world.tk[gs] });
+  if (clash) toast(`Moved to #${gs % 5 + 1} ${TEAMS[teamOf(gs)].name}`);
+  rosterKey = "";
+  renderWho();
+}
+function holding() { return me.playing && world.ball.h === me.gs; }
+// 0 standing .. 1 flat on the floor: drop fast, stay down, climb up over the last 0.35 s
+function downAmt() {
+  if (!me.playing || me.stun <= 0 || !me.downT) return 0;
+  const fall = Math.min(1, (me.downT - me.stun) / 0.2), rise = Math.min(1, me.stun / 0.35);
+  const a = Math.min(fall, rise);
+  return a * a * (3 - 2 * a);
+}
+function aimDir() {
+  const cp = Math.cos(me.pitch);
+  return { x: -Math.sin(me.yaw) * cp, y: Math.sin(me.pitch), z: -Math.cos(me.yaw) * cp };
+}
+function sendAct(t, o, v, r = -1) {
+  me.actN++;
+  me.act = { n: me.actN, t, o: o.map(r2), v: v ? v.map(r2) : null, r };
+  pubT = 0;
+  if (isHost()) applyAct(me.gs, me.act);
+  else if (t === "th" || (t === "kk" && holding())) {
+    Object.assign(world.ball, { h: -1, x: o[0], y: o[1], z: o[2], vx: v[0], vy: v[1], vz: v[2] });
+    me.relT = 0.35;
+  } else if (t === "kk") {
+    const b = world.ball;
+    if (b.h < 0 && Math.hypot(o[0] - b.x, o[2] - b.z) < 2.4 && b.y < 2.6) { b.vx = v[0]; b.vy = v[1]; b.vz = v[2]; }
+  }
+}
+function doThrow() {
+  const C = CLASSES[me.cls], d = aimDir();
+  const o = [me.x + d.x * 0.7, me.y + 1.45 + d.y * 0.5, me.z + d.z * 0.7];
+  const hp = hoopOf(teamOf(me.gs)), hx = hp.x - me.x, hz = hp.z - me.z, hd = Math.hypot(hx, hz);
+  const facing = (hx * d.x + hz * d.z) / ((hd * Math.hypot(d.x, d.z)) || 1);
+  if (hd < 18 && facing > 0.95) {
+    // a shot: arc it at the rim; accuracy from class, distance and how well the release was timed
+    const err = SHOT_ERR[C.id] * (1 + Math.abs(me.charge - 0.6) * 2) * (1 + hd / 18);
+    const tgt = [hp.x + (Math.random() - 0.5) * 2 * err, RIM_Y + 0.05, hp.z + (Math.random() - 0.5) * 2 * err];
+    sendAct("th", o, arc(o, tgt, shotTime(o, tgt)));
+  } else {
+    const pw = C.thMin + me.charge * (C.thMax - C.thMin);
+    sendAct("th", o, [d.x * pw, d.y * pw + 2.5, d.z * pw]);
+  }
+  me.charge = 0;
+}
+function doKick() {
+  if (!me.playing || me.stun > 0) return;
+  const f = fwd(me.yaw), up = 4 + Math.max(0, me.pitch) * 16, pw = CLASSES[me.cls].kick;
+  const o = holding() ? [me.x + f.x * 0.8, me.y + 0.6, me.z + f.z * 0.8] : [me.x, me.y + 0.5, me.z];
+  sendAct("kk", o, [f.x * pw, up, f.z * pw]);
+}
+function doPass() {
+  if (!holding()) return;
+  const d = aimDir(), t = teamOf(me.gs);
+  let best = -1, bs = -1e9;
+  for (let j = t * 5; j < t * 5 + 5; j++) {
+    if (j === me.gs) continue;
+    const p = posOf(j), dx = p.x - me.x, dz = p.z - me.z, dist = Math.hypot(dx, dz);
+    if (dist < 2) continue;
+    const dot = (dx * d.x + dz * d.z) / (dist * Math.hypot(d.x, d.z) || 1);
+    const s = dot * 10 - dist * 0.08;
+    if (dot > 0.2 && s > bs) { bs = s; best = j; }
+  }
+  if (best < 0) { doThrow(); return; }
+  const p = posOf(best), v = velOf(best);
+  const o = [me.x + d.x * 0.7, me.y + 1.45, me.z + d.z * 0.7];
+  const C = CLASSES[me.cls], wob = C.id === "bruiser" ? 2.5 : 0;
+  const lead = Math.hypot(p.x - me.x, p.z - me.z) / C.pass * 0.85;
+  sendAct("th", o, lob(o, [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)], C.pass), best);
+  toast("Pass");
+}
+function setClass(ci) {
+  if (!me.playing || ci === me.cls) return;
+  if (me.stun > 0) { toast("Can't switch while down"); return; }
+  me.cls = ci; me.charging = false; me.charge = 0;
+  try { localStorage.setItem("steelball-class", String(ci)); } catch (e) {}
+  renderWho(); rosterKey = ""; pubT = 0;
+  toast(`Now playing ${CLASSES[ci].name}`);
+}
+let callCd = 0;
+function doCall() {
+  if (!me.playing || holding() || callCd > 0) return;
+  callCd = 1;
+  sendAct("cl", [me.x, 1, me.z], null);
+  const b = world.ball;
+  toast(b.h >= 0 && teamOf(b.h) === teamOf(me.gs) ? "Calling for the ball" : "Calling…");
+}
+function doTackle() {
+  if (!me.playing || me.stun > 0 || me.tackleCd > 0 || holding()) return;
+  if (CLASSES[me.cls].id === "striker") { toast("Strikers can't tackle"); return; }
+  const C = CLASSES[me.cls], reachAhead = C.lunge * C.lungeT * 0.4;
+  me.tackleT = C.lungeT; me.tackleCd = C.tcd;
+  const f = fwd(me.yaw);
+  sendAct("tk", [me.x + f.x * reachAhead, 1, me.z + f.z * reachAhead], null);
+}
+
+function meStep(dt) {
+  me.tackleCd -= dt; me.relT -= dt; callCd -= dt;
+  const incoming = world.pass.t > 0 && world.pass.to === me.gs;
+  if (incoming && !me.passWarned) toast("Incoming pass");
+  me.passWarned = incoming;
+  if (world.k !== me.kSeen) {
+    if (me.kSeen >= 0) {
+      const s = spawn(me.gs);
+      Object.assign(me, { x: s.x, z: s.z, y: 0, yaw: s.yaw, pitch: 0, vx: 0, vz: 0, vy: 0 });
+    }
+    me.kSeen = world.k;
+  }
+  const tot = world.sc[0] + world.sc[1];
+  if (me.scSeen === undefined || tot < me.scSeen) me.scSeen = tot;
+  if (tot > me.scSeen) {
+    me.scSeen = tot;
+    if (world.lg >= 0) banner(world.lp === 0 ? "Dunk" : world.lp === 3 ? "Three" : "Basket", `${TEAMS[world.lg].name} +${world.lp === 3 ? 3 : 2}`, TEAMS[world.lg].css);
+  }
+  if (world.tk[me.gs] > me.tkSeen) {
+    me.tkSeen = world.tk[me.gs];
+    me.stun = world.sd[me.gs] || 0.9; me.downT = me.stun; me.charging = false; me.charge = 0; me.tackleT = 0;
+    const kb = fwd(me.yaw); me.vx = -kb.x * me.stun * 5; me.vz = -kb.z * me.stun * 5;
+    $("downtxt").textContent = me.stun > 1.3 ? "Flattened" : "Knocked down";
+  }
+  if (me.stun > 0) { me.stun -= dt; if (me.stun <= 0) me.recover = 0.5; }
+  else if (me.recover > 0) me.recover -= dt;
+
+  const turn = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
+  const tilt = (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
+  me.yaw += turn * 2.4 * dt; me.pitch = clamp(me.pitch + tilt * 1.6 * dt, -1.35, 1.35);
+
+  const f = fwd(me.yaw), r = { x: -f.z, z: f.x };
+  const iz = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+  const ix = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+  let wx = f.x * iz + r.x * ix, wz = f.z * iz + r.z * ix;
+  const wl = Math.hypot(wx, wz);
+  if (wl > 0) { wx /= wl; wz /= wl; }
+  const C = CLASSES[me.cls];
+  let speed = C.run;
+  const sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
+  if (sprint && wl > 0 && me.stam > 0.02) { speed = C.sprint; me.stam = Math.max(0, me.stam - C.drain * dt); }
+  else me.stam = Math.min(1, me.stam + 0.2 * dt);
+  if (holding()) speed *= 0.9;
+  if (me.recover > 0) speed *= 0.45; // groggy for a moment after getting up
+  if (me.tackleT > 0) { me.tackleT -= dt; wx = f.x; wz = f.z; speed = C.lunge; }
+  if (me.stun > 0) { wx = wz = 0; }
+  const k = 1 - Math.exp(-(me.stun > 0 ? 3 : 12) * dt);
+  me.vx += (wx * speed - me.vx) * k; me.vz += (wz * speed - me.vz) * k;
+  if (keys.has("Space") && me.y <= 0 && me.stun <= 0) me.vy = C.jump;
+  me.vy -= PG * dt; me.y += me.vy * dt;
+  if (me.y < 0) { me.y = 0; me.vy = 0; }
+  me.x = clamp(me.x + me.vx * dt, -HL + 0.5, HL - 0.5);
+  me.z = clamp(me.z + me.vz * dt, -HW + 0.5, HW - 0.5);
+  for (let j = 0; j < 10; j++) {
+    if (j === me.gs) continue;
+    const p = posOf(j), ex = me.x - p.x, ez = me.z - p.z, dd = Math.hypot(ex, ez);
+    if (dd > 0.001 && dd < 1.0) { me.x += ex / dd * (1.0 - dd); me.z += ez / dd * (1.0 - dd); }
+  }
+  if (me.charging) {
+    if (!holding()) { me.charging = false; me.charge = 0; }
+    else me.charge = Math.min(1, me.charge + dt * (C.id === "striker" ? 1.8 : 1.3));
+  }
+}
+
+// ---------- three.js scene ----------
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0e12);
+scene.fog = new THREE.Fog(0x0b0e12, 60, 140);
+const camera = new THREE.PerspectiveCamera(78, 1, 0.05, 220);
+camera.rotation.order = "YXZ";
+scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a1d22, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(10, 30, 14); scene.add(sun);
+const fill = new THREE.DirectionalLight(0x8fb4ff, 0.3); fill.position.set(-14, 20, -10); scene.add(fill);
+
+function floorTexture() {
+  const c = document.createElement("canvas"); c.width = 1792; c.height = 1088;
+  const g = c.getContext("2d"), s = c.width / L;
+  g.fillStyle = "#1c2027"; g.fillRect(0, 0, c.width, c.height);
+  for (let x = 0; x < L; x += 2) for (let z = 0; z < W; z += 2) {
+    const v = 26 + ((x * 7 + z * 13) % 5);
+    g.fillStyle = `rgb(${v},${v + 3},${v + 8})`;
+    g.fillRect(x * s + 1.5, z * s + 1.5, 2 * s - 3, 2 * s - 3);
+  }
+  g.fillStyle = "rgba(255,122,26,0.07)"; g.fillRect(0, 0, c.width / 2, c.height);
+  g.fillStyle = "rgba(47,214,255,0.07)"; g.fillRect(c.width / 2, 0, c.width / 2, c.height);
+  g.strokeStyle = "rgba(233,237,242,0.55)"; g.lineWidth = 5;
+  g.beginPath(); g.moveTo(c.width / 2, 0); g.lineTo(c.width / 2, c.height); g.stroke();
+  g.beginPath(); g.arc(c.width / 2, c.height / 2, 5 * s, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = "rgba(233,237,242,0.8)"; g.beginPath(); g.arc(c.width / 2, c.height / 2, 0.9 * s, 0, Math.PI * 2); g.fill();
+  // the key and the three-point arc at each end
+  [[0, "#ff7a1a", "rgba(255,122,26,0.16)", 1], [c.width, "#2fd6ff", "rgba(47,214,255,0.16)", -1]].forEach(([x, col, fill, sg]) => {
+    const cy = c.height / 2, kx = sg > 0 ? x : x - 6 * s;
+    g.fillStyle = fill; g.fillRect(kx, cy - 2.5 * s, 6 * s, 5 * s);
+    g.strokeStyle = col; g.lineWidth = 6; g.strokeRect(kx, cy - 2.5 * s, 6 * s, 5 * s);
+    g.beginPath(); g.arc(x + sg * 1.7 * s, cy, R3 * s, -Math.PI / 2, Math.PI / 2, sg < 0); g.stroke();
+  });
+  g.strokeStyle = "rgba(233,237,242,0.35)"; g.lineWidth = 8; g.strokeRect(4, 4, c.width - 8, c.height - 8);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+  return t;
+}
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, W), new THREE.MeshStandardMaterial({ map: floorTexture(), metalness: 0.35, roughness: 0.55 }));
+floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 0.9 }));
+outer.rotation.x = -Math.PI / 2; outer.position.y = -0.02; scene.add(outer);
+
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x2b313a, metalness: 0.7, roughness: 0.4 });
+const trimMat = new THREE.MeshBasicMaterial({ color: 0xdfe6ee });
+const WH = 4.5;
+function box(w, h, d, x, y, z, m) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); scene.add(o); return o; }
+box(L + 1, WH, 0.5, 0, WH / 2, -HW - 0.25, wallMat); box(L + 1, WH, 0.5, 0, WH / 2, HW + 0.25, wallMat);
+box(L + 1, 0.12, 0.1, 0, 0.9, -HW + 0.02, trimMat); box(L + 1, 0.12, 0.1, 0, 0.9, HW - 0.02, trimMat);
+[0, 1].forEach(t => {
+  const sx = t === 0 ? -1 : 1, col = TEAMS[t].col, glow = new THREE.MeshBasicMaterial({ color: col });
+  box(0.5, WH, W + 1, sx * (HL + 0.25), WH / 2, 0, wallMat);
+  box(0.1, 0.12, W, sx * (HL - 0.02), 0.9, 0, glow);
+  // post, arm, glass backboard with a glowing frame and target square, rim and net
+  box(0.35, RIM_Y + 1.6, 0.35, sx * (HL - 0.2), (RIM_Y + 1.6) / 2, 0, wallMat);
+  box(0.75, 0.2, 0.3, sx * (HL - 0.55), RIM_Y + 1.0, 0, wallMat);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 3.6), new THREE.MeshStandardMaterial({ color: 0xcfe3ff, transparent: true, opacity: 0.28, metalness: 0.2, roughness: 0.1 }));
+  board.position.set(sx * BOARD_X, RIM_Y + 0.8, 0); scene.add(board);
+  box(0.1, 0.06, 3.6, sx * BOARD_X, RIM_Y - 0.3, 0, glow); box(0.1, 0.06, 3.6, sx * BOARD_X, RIM_Y + 1.9, 0, glow);
+  box(0.1, 2.2, 0.06, sx * BOARD_X, RIM_Y + 0.8, -1.8, glow); box(0.1, 2.2, 0.06, sx * BOARD_X, RIM_Y + 0.8, 1.8, glow);
+  box(0.1, 0.05, 0.9, sx * BOARD_X, RIM_Y + 0.2, 0, glow); box(0.1, 0.05, 0.9, sx * BOARD_X, RIM_Y + 0.75, 0, glow);
+  box(0.1, 0.6, 0.05, sx * BOARD_X, RIM_Y + 0.47, -0.45, glow); box(0.1, 0.6, 0.05, sx * BOARD_X, RIM_Y + 0.47, 0.45, glow);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM_R, 0.045, 10, 36), glow);
+  rim.rotation.x = Math.PI / 2; rim.position.set(sx * HOOP_X, RIM_Y, 0); scene.add(rim);
+  const net = new THREE.Mesh(new THREE.CylinderGeometry(RIM_R, RIM_R * 0.6, 0.7, 16, 3, true), new THREE.MeshBasicMaterial({ color: 0xe9edf2, wireframe: true, transparent: true, opacity: 0.55 }));
+  net.position.set(sx * HOOP_X, RIM_Y - 0.35, 0); scene.add(net);
+});
+const standMat = new THREE.MeshStandardMaterial({ color: 0x14181e, roughness: 0.9 });
+for (let i = 0; i < 4; i++) {
+  const h = 2.4 + i * 2.2, off = 3 + i * 3.2;
+  box(L + 10 + i * 6, h, 3.2, 0, h / 2, -HW - off, standMat); box(L + 10 + i * 6, h, 3.2, 0, h / 2, HW + off, standMat);
+  box(3.2, h, W + 10 + i * 6, -HL - off - 1.5, h / 2, 0, standMat); box(3.2, h, W + 10 + i * 6, HL + off + 1.5, h / 2, 0, standMat);
+}
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xf6f8ff });
+for (const [x, z] of [[-HL - 8, -HW - 8], [HL + 8, -HW - 8], [-HL - 8, HW + 8], [HL + 8, HW + 8]]) {
+  box(0.6, 26, 0.6, x, 13, z, wallMat); box(4, 1.6, 1.2, x, 26, z, lampMat);
+}
+const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.12, 24), new THREE.MeshStandardMaterial({ color: 0x3a414c, metalness: 0.9, roughness: 0.3, emissive: 0x223344, emissiveIntensity: 0.4 }));
+pad.position.y = 0.06; scene.add(pad);
+
+const blobGeo = new THREE.CircleGeometry(0.6, 20);
+const blobMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false });
+function blob(r) { const m = new THREE.Mesh(blobGeo, blobMat); m.rotation.x = -Math.PI / 2; m.position.y = 0.015; m.scale.setScalar(r); scene.add(m); return m; }
+
+function nameSprite() {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 64;
+  const tex = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(2.2, 0.55, 1); s.position.y = 2.45; s.userData = { c, tex, text: null };
+  return s;
+}
+function setName(s, text, css) {
+  if (s.userData.text === text) return;
+  s.userData.text = text;
+  const g = s.userData.c.getContext("2d");
+  g.clearRect(0, 0, 256, 64);
+  g.font = "700 30px 'Saira Semi Condensed', 'Arial Narrow', sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillStyle = "rgba(10,13,18,0.7)"; const w = Math.min(250, g.measureText(text).width + 24); g.fillRect(128 - w / 2, 10, w, 44);
+  g.fillStyle = css; g.fillText(text, 128, 33);
+  s.userData.tex.needsUpdate = true;
+}
+
+const dark = new THREE.MeshStandardMaterial({ color: 0x1b1f25, metalness: 0.6, roughness: 0.45 });
+function makePlayer(t) {
+  const g = new THREE.Group();
+  const armor = new THREE.MeshStandardMaterial({ color: TEAMS[t].col, metalness: 0.55, roughness: 0.35 });
+  const visor = new THREE.MeshBasicMaterial({ color: TEAMS[t].col });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+  const gun = new THREE.MeshStandardMaterial({ color: 0x3d434c, metalness: 0.85, roughness: 0.32 });
+  const M = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); parent.add(o); return o; };
+  const Bx = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+  const legs = (body, x, w, h, d, m, extra) => [-1, 1].map(s => {
+    const lg = new THREE.Group(); lg.position.set(s * x, h, 0);
+    M(lg, Bx(w, h, d), m, 0, -h / 2, 0);
+    if (extra) extra(lg, s);
+    body.add(lg); return lg;
+  });
+  const variants = [];
+  { // Bruiser: hunched gunmetal tank, huge spiked pauldrons, grille helmet sunk into the shoulders, big fists
+    const body = new THREE.Group(); g.add(body);
+    M(body, Bx(1.05, 0.95, 0.7), gun, 0, 1.2, 0);
+    M(body, Bx(0.86, 0.5, 0.12), armor, 0, 1.28, -0.38);
+    M(body, Bx(0.82, 0.36, 0.56), dark, 0, 0.76, 0);
+    for (const s of [-1, 1]) {
+      M(body, Bx(0.58, 0.44, 0.78), armor, s * 0.74, 1.68, 0, 0, 0, s * -0.25);
+      for (let k = 0; k < 3; k++) M(body, new THREE.ConeGeometry(0.075, 0.26, 8), gun, s * (0.6 + k * 0.14), 1.97 - k * 0.05, 0, 0, 0, s * -0.4);
+      M(body, Bx(0.32, 0.72, 0.36), dark, s * 0.8, 1.08, 0);
+      M(body, Bx(0.4, 0.32, 0.44), armor, s * 0.82, 0.62, -0.02);
+    }
+    M(body, Bx(0.44, 0.42, 0.44), gun, 0, 1.86, -0.08);
+    M(body, Bx(0.32, 0.05, 0.04), visor, 0, 1.92, -0.31);
+    for (let k = 0; k < 3; k++) M(body, Bx(0.3, 0.03, 0.04), dark, 0, 1.82 - k * 0.055, -0.31);
+    const [legL, legR] = legs(body, 0.27, 0.36, 0.62, 0.4, dark, lg => M(lg, Bx(0.4, 0.2, 0.46), armor, 0, -0.52, -0.02));
+    variants.push({ body, legL, legR, lean: 0.14 });
+  }
+  { // Midfield man: balanced build, dome helmet with antenna, backpack, glowing armbands
+    const body = new THREE.Group(); g.add(body);
+    M(body, Bx(0.78, 0.78, 0.46), armor, 0, 1.18, 0);
+    M(body, Bx(0.8, 0.1, 0.48), dark, 0, 1.12, 0);
+    M(body, Bx(0.6, 0.3, 0.4), dark, 0, 0.72, 0);
+    M(body, Bx(1.0, 0.2, 0.5), armor, 0, 1.58, 0);
+    M(body, new THREE.SphereGeometry(0.25, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), armor, 0, 1.76, 0);
+    M(body, new THREE.CylinderGeometry(0.25, 0.25, 0.16, 18), dark, 0, 1.7, 0);
+    M(body, Bx(0.38, 0.08, 0.06), visor, 0, 1.72, -0.24);
+    M(body, new THREE.CylinderGeometry(0.015, 0.015, 0.42, 6), dark, 0.14, 2.06, 0.06);
+    M(body, new THREE.SphereGeometry(0.045, 8, 6), visor, 0.14, 2.28, 0.06);
+    M(body, Bx(0.44, 0.5, 0.2), dark, 0, 1.22, 0.32);
+    for (const s of [-1, 1]) {
+      M(body, Bx(0.18, 0.62, 0.22), dark, s * 0.5, 1.12, 0);
+      M(body, Bx(0.21, 0.07, 0.25), visor, s * 0.5, 1.3, 0);
+    }
+    const [legL, legR] = legs(body, 0.17, 0.22, 0.62, 0.26, dark, lg => M(lg, Bx(0.24, 0.14, 0.1), armor, 0, -0.3, -0.15));
+    variants.push({ body, legL, legR, lean: 0.03 });
+  }
+  { // Striker: tall and slim, bright team colour, wraparound glowing visor, crest fin, light-strip legs
+    const body = new THREE.Group(); g.add(body);
+    M(body, Bx(0.5, 0.62, 0.32), armor, 0, 1.28, 0);
+    M(body, Bx(0.08, 0.5, 0.02), visor, 0, 1.3, -0.17);
+    M(body, Bx(0.38, 0.28, 0.3), dark, 0, 0.86, 0);
+    M(body, Bx(0.64, 0.1, 0.34), dark, 0, 1.62, 0);
+    for (const s of [-1, 1]) {
+      M(body, Bx(0.12, 0.62, 0.14), dark, s * 0.34, 1.22, 0);
+      M(body, Bx(0.14, 0.2, 0.16), armor, s * 0.34, 1.5, 0);
+    }
+    M(body, new THREE.SphereGeometry(0.2, 16, 12), armor, 0, 1.88, 0);
+    M(body, new THREE.CylinderGeometry(0.205, 0.205, 0.1, 18, 1, true, Math.PI * 0.55, Math.PI * 0.9), visor, 0, 1.89, 0);
+    M(body, Bx(0.05, 0.26, 0.52), visor, 0, 2.08, 0.06);
+    const [legL, legR] = legs(body, 0.13, 0.16, 0.86, 0.2, dark, lg => {
+      M(lg, Bx(0.04, 0.7, 0.02), visor, 0, -0.43, -0.11);
+      M(lg, Bx(0.04, 0.24, 0.22), armor, 0, -0.62, 0.15);
+    });
+    variants.push({ body, legL, legR, lean: 0 });
+  }
+  const ring = add(new THREE.RingGeometry(0.7, 0.85, 28), new THREE.MeshBasicMaterial({ color: TEAMS[t].col, side: THREE.DoubleSide }), 0, 0.03, 0);
+  ring.rotation.x = -Math.PI / 2; ring.visible = false;
+  const tag = nameSprite(); g.add(tag); tag.visible = false;
+  variants.forEach(v => { v.body.visible = false; });
+  g.userData = { variants, cur: -1, ring, tag, phase: Math.random() * 6, lx: 0, lz: 0, shadow: blob(1) };
+  scene.add(g);
+  return g;
+}
+const pm = [];
+for (let i = 0; i < 10; i++) pm.push(makePlayer(teamOf(i)));
+
+const ball = new THREE.Mesh(new THREE.SphereGeometry(BR, 28, 18), new THREE.MeshStandardMaterial({ color: 0xe3e8ee, metalness: 0.95, roughness: 0.18, emissive: 0x3a4250, emissiveIntensity: 0.6 }));
+scene.add(ball);
+const ballLight = new THREE.PointLight(0xdfe9ff, 0.7, 7); scene.add(ballLight);
+const ballShadow = blob(0.45);
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+let bannerT = 0, toastT = 0;
+function banner(big, small, css) { const el = $("banner"); el.textContent = big; el.style.color = css; const s = document.createElement("small"); s.textContent = small; el.appendChild(s); el.hidden = false; bannerT = 2.4; }
+function toast(t) { $("toast").textContent = t; $("toast").hidden = false; toastT = 1.2; }
+function renderWho() {
+  const t = teamOf(me.gs);
+  $("who").textContent = `${CLASSES[me.cls].name} · #${me.gs % 5 + 1} ${TEAMS[t].name}`;
+  $("who").style.color = TEAMS[t].css;
+}
+function setNet() {
+  const el = $("netline");
+  if (!room) {
+    el.textContent = !me.playing ? (hashCode() ? `Enter to join game ${hashCode()}` : "Enter the arena to go online")
+      : netBusy ? "Connecting…" : "Couldn't connect · you and bots";
+    $("roster").textContent = ""; return;
+  }
+  if (!connected) { el.textContent = "Reconnecting…"; return; }
+  renderRoster();
+}
+let rosterKey = "";
+function renderRoster(n) {
+  if (!room) return;
+  const list = [];
+  if (me.playing) list.push([me.gs, `${me.name} (you) · ${CLASSES[me.cls].name}`]);
+  for (const k of Object.keys(humans)) list.push([+k, `${humans[k].name} · ${CLASSES[humans[k].c].name}`]);
+  list.sort((a, b) => a[0] - b[0]);
+  const key = list.map(x => x.join(":")).join("|") + connected + (hostPeer === myPeer);
+  if (key === rosterKey) return;
+  rosterKey = key;
+  const el = $("netline"); el.textContent = "";
+  const b = document.createElement("b"); b.textContent = `${list.length} online`; el.appendChild(b);
+  el.appendChild(document.createTextNode(` · game ${netCode}` + (isHost() && me.playing ? " · you host" : "")));
+  const r = $("roster"); r.textContent = "";
+  for (const [gs, nm] of list) {
+    const d = document.createElement("div"); d.textContent = `${nm} · #${gs % 5 + 1}`; d.style.color = TEAMS[teamOf(gs)].css; r.appendChild(d);
+  }
+}
+const rc = $("radar").getContext("2d");
+function drawRadar() {
+  const w = 168, h = 104, s = 2.8, ox = w / 2, oy = h / 2;
+  rc.clearRect(0, 0, w, h);
+  rc.strokeStyle = "rgba(233,237,242,0.3)"; rc.lineWidth = 1;
+  rc.strokeRect(ox - HL * s, oy - HW * s, L * s, W * s);
+  rc.beginPath(); rc.moveTo(ox, oy - HW * s); rc.lineTo(ox, oy + HW * s); rc.stroke();
+  rc.lineWidth = 2;
+  rc.strokeStyle = TEAMS[0].css; rc.beginPath(); rc.arc(ox - HOOP_X * s, oy, 2.5, 0, 7); rc.stroke();
+  rc.strokeStyle = TEAMS[1].css; rc.beginPath(); rc.arc(ox + HOOP_X * s, oy, 2.5, 0, 7); rc.stroke();
+  rc.lineWidth = 1;
+  for (let i = 0; i < 10; i++) {
+    if (me.playing && i === me.gs) continue;
+    const p = posOf(i); rc.fillStyle = TEAMS[teamOf(i)].css;
+    rc.beginPath(); rc.arc(ox + p.x * s, oy + p.z * s, humans[i] ? 3.2 : 2.3, 0, 7); rc.fill();
+  }
+  if (me.playing) {
+    const f = fwd(me.yaw), x = ox + me.x * s, y = oy + me.z * s;
+    rc.fillStyle = "#ffffff"; rc.beginPath();
+    rc.moveTo(x + f.x * 6, y + f.z * 6); rc.lineTo(x - f.x * 3 - f.z * 3.5, y - f.z * 3 + f.x * 3.5); rc.lineTo(x - f.x * 3 + f.z * 3.5, y - f.z * 3 - f.x * 3.5); rc.fill();
+  }
+  const b = world.ball; rc.fillStyle = "#ffffff"; rc.strokeStyle = "#000"; rc.beginPath(); rc.arc(ox + b.x * s, oy + b.z * s, 2.6, 0, 7); rc.fill(); rc.stroke();
+}
+let hudKey = "";
+function hud(dt) {
+  const t = Math.ceil(world.tm), clock = world.ph === "end" ? "Full time" : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+  const key = world.sc.join() + clock;
+  if (key !== hudKey) { hudKey = key; $("goals").textContent = `${world.sc[0]} – ${world.sc[1]}`; $("clock").textContent = clock; }
+  if (world.ph === "end" && $("banner").hidden) {
+    const w = world.sc[0] === world.sc[1] ? -1 : world.sc[0] > world.sc[1] ? 0 : 1;
+    banner(w < 0 ? "Draw" : TEAMS[w].name, "Full time · new match shortly", w < 0 ? "#e9edf2" : TEAMS[w].css); bannerT = 1;
+  }
+  if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0 && world.ph !== "end") $("banner").hidden = true; }
+  if (world.ph !== "end" && bannerT <= 0) $("banner").hidden = true;
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $("toast").hidden = true; }
+  if (!me.playing) return;
+  $("stam").style.transform = `scaleX(${me.stam.toFixed(3)})`;
+  const down = me.stun > 0;
+  $("down").hidden = !down;
+  $("cross").hidden = down;
+  if (down) $("downbar").style.transform = `scaleX(${clamp(me.stun / (me.downT || 1), 0, 1).toFixed(3)})`;
+  $("hurt").style.opacity = down ? (0.35 + 0.6 * downAmt()).toFixed(2) : me.recover > 0 ? (me.recover * 0.6).toFixed(2) : "0";
+  const hold = holding();
+  $("charge").hidden = !hold;
+  if (hold) { $("chargebar").style.transform = `scaleX(${me.charging ? me.charge.toFixed(3) : 0})`; $("chargelab").textContent = me.charging ? "Release near the mark" : "You have the ball"; }
+  $("pause").hidden = locked || lockFailed || !document.hasFocus();
+  drawRadar();
+}
+
+// ---------- input ----------
+// lockFailed means the browser has no pointer lock at all. A refused request (Chrome refuses for
+// about a second after the mouse is released) just waits for the next click.
+if (typeof canvas.requestPointerLock !== "function") lockFailed = true;
+function lockRefused() { if (me.playing && !locked) toast("Click again to grab the mouse"); }
+function grab() {
+  if (locked || lockFailed) return;
+  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(lockRefused); } catch (e) { lockRefused(); }
+}
+document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === canvas; });
+document.addEventListener("pointerlockerror", lockRefused);
+document.addEventListener("mousemove", e => {
+  if (!locked || !me.playing) return;
+  me.yaw -= e.movementX * 0.0022;
+  me.pitch = clamp(me.pitch - e.movementY * 0.0022, -1.35, 1.35);
+});
+canvas.addEventListener("mousedown", e => {
+  if (!me.playing) return;
+  canvas.focus();
+  if (!locked && !lockFailed) { grab(); return; }
+  if (e.button === 0) { lmb = true; if (holding()) { me.charging = true; me.charge = 0; } else doKick(); }
+  else if (e.button === 2) doKick();
+});
+window.addEventListener("mouseup", e => {
+  if (e.button !== 0) return;
+  lmb = false;
+  if (me.charging) { me.charging = false; if (holding()) doThrow(); }
+});
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+window.addEventListener("keydown", e => {
+  if (!me.playing || e.target.tagName === "INPUT") return;
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys.add(e.code);
+  if (e.code === "KeyF") doKick();
+  else if (e.code === "KeyQ") doPass();
+  else if (e.code === "KeyE") doTackle();
+  else if (e.code === "KeyR") doCall();
+  else if (e.code === "KeyC") setClass((me.cls + 1) % CLASSES.length);
+  else if (e.code === "Digit1" || e.code === "Digit2" || e.code === "Digit3") setClass(+e.code.slice(5) - 1);
+  else if (e.code === "KeyV") { me.view = me.view === "fp" ? "tp" : "fp"; $("viewlab").textContent = me.view === "fp" ? "First person" : "Third person"; }
+});
+window.addEventListener("keyup", e => keys.delete(e.code));
+window.addEventListener("blur", () => { keys.clear(); lmb = false; me.charging = false; });
+
+try { const saved = localStorage.getItem("steelball-name"); if (saved) $("nm").value = saved; } catch (e) {}
+let savedCls = 1;
+try { const c = +localStorage.getItem("steelball-class"); if (c >= 0 && c < CLASSES.length && localStorage.getItem("steelball-class") !== null) savedCls = c; } catch (e) {}
+const legend = document.createElement("legend"); legend.textContent = "Class"; $("classes").appendChild(legend);
+CLASSES.forEach((C, ci) => {
+  const lab = document.createElement("label"); lab.className = "cls";
+  const inp = document.createElement("input"); inp.type = "radio"; inp.name = "cls"; inp.value = ci; inp.id = "cls-" + C.id; inp.checked = ci === savedCls;
+  const cn = document.createElement("span"); cn.className = "cn"; cn.textContent = C.name;
+  const cd = document.createElement("span"); cd.className = "cd"; cd.textContent = C.blurb;
+  const dl = document.createElement("dl"); dl.className = "stats";
+  STAT_NAMES.forEach((s, k) => {
+    const dt = document.createElement("dt"); dt.textContent = s;
+    const dd = document.createElement("dd"); dd.setAttribute("aria-label", `${s} ${C.bars[k]} of 5`);
+    for (let n = 0; n < 5; n++) { const pip = document.createElement("i"); if (n < C.bars[k]) pip.className = "on"; dd.appendChild(pip); }
+    dl.append(dt, dd);
+  });
+  lab.append(inp, cn, cd, dl);
+  $("classes").appendChild(lab);
+});
+if (hashCode()) { $("mpnote").textContent = `You're joining game ${hashCode()}. Pick a class and enter.`; $("go").textContent = "Join game"; }
+$("joinform").addEventListener("submit", e => {
+  e.preventDefault();
+  me.name = ($("nm").value || "").trim().slice(0, 16) || "Rookie";
+  const picked = document.querySelector('input[name="cls"]:checked');
+  me.cls = picked ? clamp(+picked.value | 0, 0, CLASSES.length - 1) : 1;
+  try { localStorage.setItem("steelball-name", me.name); localStorage.setItem("steelball-class", String(me.cls)); } catch (e2) {}
+  me.playing = true; me.j = Date.now(); me.kSeen = world.k;
+  pickSlot(false);
+  rosterKey = "";
+  rebuild();
+  startNet();
+  $("menu").hidden = true;
+  for (const id of ["me", "keys", "cross"]) $(id).hidden = false;
+  canvas.focus();
+  grab();
+});
+
+// ---------- render ----------
+const tmpV = new THREE.Vector3();
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize); resize();
+
+function draw(dt, time) {
+  const b = world.ball;
+  for (let i = 0; i < 10; i++) {
+    const m = pm[i], u = m.userData, p = posOf(i);
+    const mine = me.playing && i === me.gs;
+    m.visible = !(mine && me.view === "fp");
+    u.shadow.visible = m.visible;
+    m.position.set(p.x, p.y || 0, p.z); m.rotation.y = p.yaw;
+    u.shadow.position.set(p.x, 0.015, p.z);
+    const sp = Math.hypot(p.x - u.lx, p.z - u.lz) / Math.max(dt, 1e-3); u.lx = p.x; u.lz = p.z;
+    u.phase += dt * Math.min(sp, 12) * 1.6;
+    const sw = Math.min(1, sp / 6) * 0.7;
+    const ci = CLASSES.indexOf(clsOf(i));
+    if (u.cur !== ci) { u.variants.forEach((v, k) => { v.body.visible = k === ci; }); u.cur = ci; }
+    const V = u.variants[ci];
+    V.legL.rotation.x = Math.sin(u.phase) * sw; V.legR.rotation.x = -Math.sin(u.phase) * sw;
+    const fallTo = mine ? downAmt() : stunned(i) ? 1 : 0;
+    u.fall = (u.fall || 0) + (fallTo - (u.fall || 0)) * (mine ? 1 : Math.min(1, dt * 12));
+    V.body.rotation.x = -(V.lean + Math.min(sp, 12) * 0.012) * (1 - u.fall) - u.fall * 1.45;
+    u.ring.visible = b.h === i;
+    const h = humans[i];
+    if (h && !mine) { u.tag.visible = true; setName(u.tag, h.name, TEAMS[teamOf(i)].css); }
+    else if (mine && me.view === "tp") { u.tag.visible = true; setName(u.tag, me.name, TEAMS[teamOf(i)].css); }
+    else u.tag.visible = false;
+  }
+  if (!me.playing) {
+    const t = time * 0.00006;
+    camera.position.set(Math.cos(t) * 30, 16 + Math.sin(t * 2.3) * 3, Math.sin(t) * 24);
+    camera.lookAt(b.x * 0.4, 0, b.z * 0.4);
+  } else if (me.view === "fp") {
+    const a = downAmt();
+    camera.position.set(me.x, me.y + 1.62 - a * 1.3, me.z);
+    camera.rotation.set(clamp(me.pitch + a * 0.75, -1.5, 1.5), me.yaw, a * 0.5);
+  } else {
+    const d = aimDir();
+    const hx = me.x, hy = me.y + 1.8 - downAmt() * 1.2, hz = me.z;
+    camera.position.set(clamp(hx - d.x * 5.2, -HL + 0.3, HL - 0.3), Math.max(0.6, hy - d.y * 5.2 + 1.1), clamp(hz - d.z * 5.2, -HW + 0.3, HW - 0.3));
+    camera.lookAt(hx + d.x * 4, hy + d.y * 4, hz + d.z * 4);
+  }
+  if (holding() && me.view === "fp") {
+    camera.updateMatrixWorld();
+    tmpV.set(0.34, -0.36, -0.78).applyMatrix4(camera.matrixWorld);
+    ball.position.copy(tmpV);
+  } else ball.position.set(b.x, b.y, b.z);
+  ballLight.position.copy(ball.position);
+  ballShadow.position.set(ball.position.x, 0.016, ball.position.z);
+  ballShadow.scale.setScalar(clamp(0.6 - ball.position.y * 0.04, 0.2, 0.6));
+  ball.rotation.x += (b.vz) * dt * 2; ball.rotation.z -= (b.vx) * dt * 2;
+  renderer.render(scene, camera);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0.0001, 0.05); last = now;
+  if (me.playing) meStep(dt);
+  for (const k in rrend) {
+    const r = rrend[k], f = 1 - Math.exp(-15 * dt), px = r.x, pz = r.z;
+    r.x += (r.tx - r.x) * f; r.y += (r.ty - r.y) * f; r.z += (r.tz - r.z) * f;
+    r.vx = (r.vx || 0) + ((r.x - px) / dt - (r.vx || 0)) * 0.2; r.vz = (r.vz || 0) + ((r.z - pz) / dt - (r.vz || 0)) * 0.2;
+    let dy = r.tyaw - r.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); r.yaw += dy * f;
+  }
+  if (isHost()) hostStep(dt); else clientStep(dt);
+  publish(dt);
+  hud(dt);
+  draw(dt, now);
+  requestAnimationFrame(frame);
+}
+setNet();
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>

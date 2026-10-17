@@ -4,6 +4,8 @@ First-person 5-a-side armoured ball game in the browser, in the spirit of Speedb
 
 Play: https://scottangusmac.github.io/steelball/
 
+Basketball variant (hoops, dunks, very high jumps): https://scottangusmac.github.io/steelball/hoops/
+
 Multiplayer: enter the arena and a game code is added to the address bar (`#ABCDE`). Send that full link to friends; they join your match. Connections are browser-to-browser via WebRTC ([PeerJS](https://peerjs.com/) public broker for the handshake); the host's browser runs the match.
 
 Single file: `index.html` (three.js r128 and PeerJS 1.5.4 from CDNs).

@@ -230,9 +230,9 @@ const CLASSES = [
   { id: "midfield", name: "Midfield man", blurb: "The engine. Endless stamina, safe hands and fast, accurate passes. Average shot and tackle.",
     run: 7, sprint: 10.2, reach: 2.6, lunge: 14, lungeT: 0.22, stunDeal: 1.1, tcd: 1.0, thMin: 14, thMax: 32, kick: 21, pass: 26,
     drain: 0.15, catch: 1.4, guard: 0, stunTake: 1, bars: [3, 3, 3, 5, 5, 3] },
-  { id: "striker", name: "Striker", blurb: "Fastest player and deadliest shot. Tackles like a feather and goes down at the slightest touch.",
+  { id: "striker", name: "Striker", blurb: "Fastest player and deadliest shot. Can't tackle at all, and goes down at the slightest touch.",
     run: 8.9, sprint: 13, reach: 1.7, lunge: 12, lungeT: 0.16, stunDeal: 0.5, tcd: 1.6, thMin: 20, thMax: 46, kick: 29, pass: 19,
-    drain: 0.38, catch: 1.2, guard: 0.9, stunTake: 1.7, bars: [5, 1, 5, 3, 2, 1] },
+    drain: 0.38, catch: 1.2, guard: 0.9, stunTake: 1.7, bars: [5, 0, 5, 3, 2, 1] },
 ];
 const STAT_NAMES = ["Speed", "Tackle", "Shooting", "Passing", "Stamina", "Toughness"];
 // keeper tuning: dive speed, catch reach (m), catch height (m), shot speed that forces a parry
@@ -522,6 +522,7 @@ function applyAct(gs, a) {
     world.np = { gs, t: 0.25 };
   } else if (a.t === "tk") {
     const A = clsOf(gs);
+    if (A.id === "striker") return; // strikers can't tackle
     let victim = -1;
     if (b.h >= 0 && teamOf(b.h) !== teamOf(gs)) {
       const p = posOf(b.h);
@@ -717,7 +718,7 @@ function botsAI(dt) {
       tx = clamp(c.x + dir * (5 + slot * 1.6), -HL + 3, HL - 3); tz = sp.z * 1.7;
     } else if (chaser[t] === i) {
       tx = tgt.x; tz = tgt.z; speed = C.run;
-      if (b.h >= 0 && o.tcd <= 0 && Math.hypot(tgt.x - o.x, tgt.z - o.z) < C.reach * 0.7) { applyAct(i, { t: "tk", o: [o.x, 1, o.z] }); o.tcd = C.tcd + 0.5; }
+      if (b.h >= 0 && C.id !== "striker" && o.tcd <= 0 && Math.hypot(tgt.x - o.x, tgt.z - o.z) < C.reach * 0.7) { applyAct(i, { t: "tk", o: [o.x, 1, o.z] }); o.tcd = C.tcd + 0.5; }
     } else {
       const bx = b.h >= 0 ? posOf(b.h).x : b.x;
       if (b.h >= 0) { tx = clamp((bx + own) / 2, -HL + 3, HL - 3); tz = sp.z * 1.2 + b.z * 0.3; }
@@ -871,6 +872,7 @@ function doCall() {
 }
 function doTackle() {
   if (!me.playing || me.stun > 0 || me.tackleCd > 0 || holding()) return;
+  if (CLASSES[me.cls].id === "striker") { toast("Strikers can't tackle"); return; }
   const C = CLASSES[me.cls], reachAhead = C.lunge * C.lungeT * 0.4;
   me.tackleT = C.lungeT; me.tackleCd = C.tcd;
   const f = fwd(me.yaw);
