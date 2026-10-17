@@ -176,7 +176,8 @@ kbd {
 <div id="keys" class="hud" hidden>
   <kbd>LMB</kbd> hold to throw / kick &nbsp; <kbd>Q</kbd> pass &nbsp; <kbd>R</kbd> call for ball<br>
   <kbd>F</kbd> kick &nbsp; <kbd>E</kbd> tackle &nbsp; <kbd>Shift</kbd> sprint<br>
-  <kbd>V</kbd> camera &nbsp; <kbd>Space</kbd> jump
+  <kbd>V</kbd> camera &nbsp; <kbd>Space</kbd> jump<br>
+  <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> / <kbd>C</kbd> switch class
 </div>
 <div id="cross" class="hud" hidden></div>
 <div id="charge" class="hud" hidden><span id="chargelab">Ball</span><div class="bar"><i id="chargebar"></i></div></div>
@@ -205,6 +206,7 @@ kbd {
       <dt><kbd>F</kbd> / <kbd>RMB</kbd></dt><dd>Kick, or punt if you hold the ball</dd>
       <dt><kbd>E</kbd></dt><dd>Tackle lunge. Knocks the ball loose</dd>
       <dt><kbd>V</kbd></dt><dd>Switch first / third person</dd>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Switch to Bruiser, Midfield man or Striker mid-match. <kbd>C</kbd> cycles</dd>
     </dl>
     <div class="note" id="mpnote">Entering starts an online game and adds its code to the address bar. Send friends that full link and they join your match. Needs keyboard and mouse.</div>
   </div>
@@ -222,17 +224,19 @@ const SPAWN = [[-25, 0], [-15, -7], [-15, 7], [-6, -4], [-6, 4]];
 const SLOT_ORDER = [1, 2, 3, 4, 0];
 // guard: tackle reach added against this class (negative = harder to strip); stunTake: multiplier on stun received
 const CLASSES = [
-  { id: "bruiser", name: "Bruiser", blurb: "Slow and heavy. Tackles reach far, stun long, and flatten anyone, ball or not.",
-    run: 5.8, sprint: 8.2, reach: 3.3, lunge: 16, lungeT: 0.3, stunDeal: 1.7, tcd: 0.9, thMin: 12, thMax: 25, kick: 18,
-    guard: -0.7, stunTake: 0.55, scale: [1.2, 1.07], bars: [2, 5, 2, 5] },
-  { id: "midfield", name: "Midfield man", blurb: "Middle of the road at everything. Passes, covers, chips in.",
-    run: 7, sprint: 10, reach: 2.6, lunge: 14, lungeT: 0.22, stunDeal: 1.0, tcd: 1.1, thMin: 14, thMax: 32, kick: 21,
-    guard: 0, stunTake: 1, scale: [1, 1], bars: [3, 3, 3, 3] },
-  { id: "striker", name: "Striker", blurb: "Fast, fragile finisher. Hardest throws and kicks, weakest tackle, easy to strip.",
-    run: 8.2, sprint: 11.8, reach: 2.0, lunge: 12, lungeT: 0.18, stunDeal: 0.7, tcd: 1.4, thMin: 17, thMax: 40, kick: 25,
-    guard: 0.5, stunTake: 1.45, scale: [0.84, 1.02], bars: [5, 1, 5, 1] },
+  { id: "bruiser", name: "Bruiser", blurb: "Slowest on the pitch and nearly impossible to knock down. Huge tackles that flatten anyone, ball or not. Can barely shoot or pass.",
+    run: 5.2, sprint: 7.4, reach: 3.6, lunge: 17, lungeT: 0.32, stunDeal: 2.2, tcd: 0.8, thMin: 10, thMax: 22, kick: 16, pass: 15,
+    drain: 0.42, catch: 0.95, guard: -1.0, stunTake: 0.4, bars: [1, 5, 1, 1, 2, 5] },
+  { id: "midfield", name: "Midfield man", blurb: "The engine. Endless stamina, safe hands and fast, accurate passes. Average shot and tackle.",
+    run: 7, sprint: 10.2, reach: 2.6, lunge: 14, lungeT: 0.22, stunDeal: 1.1, tcd: 1.0, thMin: 14, thMax: 32, kick: 21, pass: 26,
+    drain: 0.15, catch: 1.4, guard: 0, stunTake: 1, bars: [3, 3, 3, 5, 5, 3] },
+  { id: "striker", name: "Striker", blurb: "Fastest player and deadliest shot. Tackles like a feather and goes down at the slightest touch.",
+    run: 8.9, sprint: 13, reach: 1.7, lunge: 12, lungeT: 0.16, stunDeal: 0.5, tcd: 1.6, thMin: 20, thMax: 46, kick: 29, pass: 19,
+    drain: 0.38, catch: 1.2, guard: 0.9, stunTake: 1.7, bars: [5, 1, 5, 3, 2, 1] },
 ];
-const STAT_NAMES = ["Speed", "Tackle", "Shooting", "Toughness"];
+const STAT_NAMES = ["Speed", "Tackle", "Shooting", "Passing", "Stamina", "Toughness"];
+// keeper tuning: dive speed, catch reach (m), catch height (m), shot speed that forces a parry
+const KEEP = { dive: 6.0, reach: 1.15, height: 2.6, parry: 24 };
 const SLOT_CLS = [0, 0, 1, 2, 1]; // keeper, back, mid, forward, mid
 const teamOf = gs => (gs < 5 ? 0 : 1);
 const dirOf = t => (t === 0 ? 1 : -1);
@@ -489,7 +493,7 @@ async function startNet() {
 // ---------- game rules (authoritative on the host) ----------
 function kickoff() {
   const b = world.ball;
-  Object.assign(b, { x: 0, y: 0.5, z: 0, vx: (Math.random() - 0.5) * 2, vy: 13, vz: (Math.random() - 0.5) * 2, h: -1 });
+  Object.assign(b, { x: 0, y: 0.5, z: 0, vx: (Math.random() - 0.5) * 6, vy: 15, vz: (Math.random() - 0.5) * 8, h: -1 });
   world.np = { gs: -1, t: 0 }; world.pass = { to: -1, t: 0 };
   world.k++;
   world.bots.forEach((o, i) => { const s = spawn(i); Object.assign(o, { x: s.x, z: s.z, yaw: s.yaw, vx: 0, vz: 0, stun: 0, hold: 0 }); });
@@ -498,7 +502,7 @@ function goal(team) { world.sc[team]++; world.lg = team; kickoff(); }
 
 function applyAct(gs, a) {
   const b = world.ball;
-  const o = vec3(a.o, 60), v = vec3(a.v, 40);
+  const o = vec3(a.o, 60), v = vec3(a.v, 50);
   if (!o) return;
   if (a.t === "th") {
     if (b.h !== gs || !v) return;
@@ -588,7 +592,21 @@ function ballStep(dt, auth) {
       if (stunned(i)) continue;
       const target = world.pass.t > 0 && world.pass.to === i; // intended receiver gets a bigger catch zone
       const p = posOf(i), d = Math.hypot(p.x - b.x, p.z - b.z), hy = b.y - (p.y || 0);
-      if (hy < (target ? 3 : 2.4) && d < (target ? 2.1 : 1.15) && d < bd) { bd = d; best = i; }
+      // a keeper in their own goal area can stretch and dive: wider and higher reach
+      const keeper = i % 5 === 0 && Math.abs(p.x + dirOf(teamOf(i)) * HL) < 5;
+      if (keeper && d < KEEP.reach && hy < KEEP.height) {
+        const sp = Math.hypot(b.vx, b.vy, b.vz);
+        if (sp > KEEP.parry) { // too hot to hold: parry it back into play
+          b.vx = -b.vx * 0.35; b.vy = Math.abs(b.vy) * 0.4 + 4; b.vz = b.vz * 0.4 + (Math.random() - 0.5) * 10;
+          world.np = { gs: i, t: 0.35 };
+          continue;
+        }
+        const dn = d + Math.random() * 0.3;
+        if (dn < bd) { bd = dn; best = i; }
+        continue;
+      }
+      const reach = clsOf(i).catch + (target ? 0.9 : 0), dn = d + Math.random() * 0.3;
+      if (hy < (target ? 3 : 2.4) && d < reach && dn < bd) { bd = dn; best = i; }
     }
     if (best >= 0) { b.h = best; Object.assign(world.bots[best], { hold: 0, think: 0.35, call: -1 }); world.pass = { to: -1, t: 0 }; }
   }
@@ -629,15 +647,21 @@ function botPass(i, prefer = -1, forwardOnly = false) {
   if (best < 0) return false;
   const p = posOf(best), v = velOf(best), f = fwd(o.yaw);
   const org = [o.x + f.x * 0.6, 1.4, o.z + f.z * 0.6];
-  const lead = Math.hypot(p.x - o.x, p.z - o.z) / 19 * 0.85;
-  const tgt = [clamp(p.x + v.x * lead, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead, -HW + 1, HW - 1)];
-  applyAct(i, { t: "th", o: org, v: lob(org, tgt, 19), r: best });
+  const ps = clsOf(i).pass, lead = Math.hypot(p.x - o.x, p.z - o.z) / ps * 0.85;
+  const wob = clsOf(i).id === "bruiser" ? 2.5 : 0; // bruisers spray their passes
+  const tgt = [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)];
+  applyAct(i, { t: "th", o: org, v: lob(org, tgt, ps), r: best });
   return true;
 }
 
 function botsAI(dt) {
   const b = world.ball;
-  const tgt = b.h >= 0 ? posOf(b.h) : { x: b.x + b.vx * 0.25, z: b.z + b.vz * 0.25 };
+  let tgt;
+  if (b.h >= 0) tgt = posOf(b.h);
+  else {
+    const tl = b.y > 1.6 ? (b.vy + Math.sqrt(Math.max(0, b.vy * b.vy + 2 * G * (b.y - 1.2)))) / G : 0.25;
+    tgt = { x: clamp(b.x + b.vx * tl, -HL + 1, HL - 1), z: clamp(b.z + b.vz * tl, -HW + 1, HW - 1) };
+  }
   const chaser = [-1, -1];
   for (const t of [0, 1]) {
     if (b.h >= 0 && teamOf(b.h) === t) continue;
@@ -648,7 +672,8 @@ function botsAI(dt) {
       if (d < bd) { bd = d; chaser[t] = i; }
     }
   }
-  for (let i = 0; i < 10; i++) {
+  const order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+  for (const i of order) {
     if (isHuman(i)) continue;
     const o = world.bots[i], t = teamOf(i), dir = dirOf(t), slot = i % 5, sp = spawn(i), C = clsOf(i);
     const own = -dir * HL, opp = dir * HL;
@@ -672,8 +697,21 @@ function botsAI(dt) {
         else if (o.hold > 1 && Math.random() < 0.3) botPass(i, -1, true);
       }
     } else if (slot === 0) {
-      tx = own + dir * 1.6; tz = clamp(b.z, -GW + 0.6, GW - 0.6); speed = C.run;
-      if (b.h < 0 && Math.abs(b.x - own) < 10) { tx = b.x; tz = b.z; speed = C.run * 1.1; }
+      // keepers move like keepers whatever their class
+      speed = Math.max(C.run, 7.2);
+      const bp = b.h >= 0 ? posOf(b.h) : b, depth = Math.abs(bp.x - own);
+      // narrow the angle: come off the line as play approaches, shade towards the ball's side
+      tx = own + dir * clamp(1 + (30 - Math.min(depth, 30)) * 0.08, 1, 3);
+      tz = clamp(bp.z * 0.4, -GW + 0.8, GW - 0.8);
+      const lineX = own + dir * 1.2;
+      if (b.h < 0 && b.vx * -dir > 5) {
+        // shot or pass heading for goal: get to where it crosses the line
+        const t = (lineX - b.x) / b.vx;
+        if (t > 0 && t < 1.8) {
+          const pz = b.z + b.vz * t, py = b.y + b.vy * t - 0.5 * G * t * t;
+          if (Math.abs(pz) < GW + 1.2 && py < GH + 0.6) { tx = lineX; tz = clamp(pz, -GW + 0.3, GW - 0.3); speed = KEEP.dive; }
+        }
+      } else if (b.h < 0 && depth < 10 && Math.hypot(b.vx, b.vz) < 12) { tx = b.x; tz = b.z; speed = Math.max(C.run, 7.2) * 1.1; }
     } else if (b.h >= 0 && teamOf(b.h) === t) {
       const c = posOf(b.h);
       tx = clamp(c.x + dir * (5 + slot * 1.6), -HL + 3, HL - 3); tz = sp.z * 1.7;
@@ -698,7 +736,7 @@ function botsAI(dt) {
     const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
     const s = d > 0.4 ? Math.min(speed, d * 3) : 0;
     const wx = d > 0.01 ? dx / d * s : 0, wz = d > 0.01 ? dz / d * s : 0;
-    const k = 1 - Math.exp(-6 * dt);
+    const k = 1 - Math.exp(-(slot === 0 ? 13 : 6) * dt);
     o.vx += (wx - o.vx) * k; o.vz += (wz - o.vz) * k;
     for (let j = 0; j < 10; j++) {
       if (j === i) continue;
@@ -810,9 +848,18 @@ function doPass() {
   if (best < 0) { doThrow(); return; }
   const p = posOf(best), v = velOf(best);
   const o = [me.x + d.x * 0.7, me.y + 1.45, me.z + d.z * 0.7];
-  const lead = Math.hypot(p.x - me.x, p.z - me.z) / 19 * 0.85;
-  sendAct("th", o, lob(o, [clamp(p.x + v.x * lead, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead, -HW + 1, HW - 1)], 19), best);
+  const C = CLASSES[me.cls], wob = C.id === "bruiser" ? 2.5 : 0;
+  const lead = Math.hypot(p.x - me.x, p.z - me.z) / C.pass * 0.85;
+  sendAct("th", o, lob(o, [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), 1.3, clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)], C.pass), best);
   toast("Pass");
+}
+function setClass(ci) {
+  if (!me.playing || ci === me.cls) return;
+  if (me.stun > 0) { toast("Can't switch while down"); return; }
+  me.cls = ci; me.charging = false; me.charge = 0;
+  try { localStorage.setItem("steelball-class", String(ci)); } catch (e) {}
+  renderWho(); rosterKey = ""; pubT = 0;
+  toast(`Now playing ${CLASSES[ci].name}`);
 }
 let callCd = 0;
 function doCall() {
@@ -865,7 +912,7 @@ function meStep(dt) {
   const C = CLASSES[me.cls];
   let speed = C.run;
   const sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
-  if (sprint && wl > 0 && me.stam > 0.02) { speed = C.sprint; me.stam = Math.max(0, me.stam - 0.32 * dt); }
+  if (sprint && wl > 0 && me.stam > 0.02) { speed = C.sprint; me.stam = Math.max(0, me.stam - C.drain * dt); }
   else me.stam = Math.min(1, me.stam + 0.2 * dt);
   if (holding()) speed *= 0.9;
   if (me.recover > 0) speed *= 0.45; // groggy for a moment after getting up
@@ -1159,12 +1206,16 @@ function hud(dt) {
 }
 
 // ---------- input ----------
+// lockFailed means the browser has no pointer lock at all. A refused request (Chrome refuses for
+// about a second after the mouse is released) just waits for the next click.
+if (typeof canvas.requestPointerLock !== "function") lockFailed = true;
+function lockRefused() { if (me.playing && !locked) toast("Click again to grab the mouse"); }
 function grab() {
   if (locked || lockFailed) return;
-  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { lockFailed = true; }); } catch (e) { lockFailed = true; }
+  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(lockRefused); } catch (e) { lockRefused(); }
 }
 document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === canvas; });
-document.addEventListener("pointerlockerror", () => { lockFailed = true; });
+document.addEventListener("pointerlockerror", lockRefused);
 document.addEventListener("mousemove", e => {
   if (!locked || !me.playing) return;
   me.yaw -= e.movementX * 0.0022;
@@ -1192,6 +1243,8 @@ window.addEventListener("keydown", e => {
   else if (e.code === "KeyQ") doPass();
   else if (e.code === "KeyE") doTackle();
   else if (e.code === "KeyR") doCall();
+  else if (e.code === "KeyC") setClass((me.cls + 1) % CLASSES.length);
+  else if (e.code === "Digit1" || e.code === "Digit2" || e.code === "Digit3") setClass(+e.code.slice(5) - 1);
   else if (e.code === "KeyV") { me.view = me.view === "fp" ? "tp" : "fp"; $("viewlab").textContent = me.view === "fp" ? "First person" : "Third person"; }
 });
 window.addEventListener("keyup", e => keys.delete(e.code));
