@@ -257,17 +257,12 @@ function spawn(gs) {
   const [x, z] = SPAWN[gs % 5];
   return teamOf(gs) === 0 ? { x, z, yaw: -Math.PI / 2 } : { x: -x, z: -z, yaw: Math.PI / 2 };
 }
-function lob(o, t, speed) {
-  const dx = t[0] - o[0], dy = t[1] - o[1], dz = t[2] - o[2];
-  const tt = Math.max(0.2, Math.hypot(dx, dz) / speed);
-  return [dx / tt, dy / tt + 0.5 * G * tt, dz / tt];
-}
 function vec3(a, lim) { return Array.isArray(a) && a.length === 3 && a.every(Number.isFinite) ? a.map(v => clamp(v, -lim, lim)) : null; }
 
 // ---------- state ----------
 const world = {
   ball: { x: 0, y: 0.5, z: 0, vx: 0, vy: 13, vz: 0, h: -1 },
-  np: { gs: -1, t: 0 }, pass: { to: -1, t: 0 }, bots: [], sc: [0, 0], tm: MATCH, ph: "play", endT: 0, k: 0, lg: -1,
+  np: { gs: -1, t: 0 }, pass: { to: -1, t: 0, fl: 0 }, bots: [], sc: [0, 0], tm: MATCH, ph: "play", endT: 0, k: 0, lg: -1,
   tk: new Array(10).fill(0), sd: new Array(10).fill(1), koT: 0, lt: null, lp: 2, slamT: 0,
 };
 for (let i = 0; i < 10; i++) {
@@ -321,7 +316,13 @@ function rebuild() {
     let r = rrend[p.peer];
     if (Array.isArray(pp) && pp.length >= 4 && pp.every(Number.isFinite)) {
       if (!r) r = rrend[p.peer] = { x: pp[0], y: pp[1], z: pp[2], yaw: pp[3], tx: pp[0], ty: pp[1], tz: pp[2], tyaw: pp[3] };
-      r.tx = clamp(pp[0], -HL, HL); r.ty = clamp(pp[1], 0, 5); r.tz = clamp(pp[2], -HW, HW); r.tyaw = pp[3];
+      const nx = clamp(pp[0], -HL, HL), ny = clamp(pp[1], 0, 12), nz = clamp(pp[2], -HW, HW), now = performance.now();
+      // velocity from successive updates, so passes can lead a remote player (and their jump)
+      const pdt = (now - (r.pt || 0)) / 1000;
+      if (r.pt && pdt > 0.02 && pdt < 0.5 && (nx !== r.tx || ny !== r.ty || nz !== r.tz)) { r.vx = (nx - r.tx) / pdt; r.vy = (ny - r.ty) / pdt; r.vz = (nz - r.tz) / pdt; }
+      else if (pdt >= 0.5) r.vx = r.vy = r.vz = 0;
+      if (nx !== r.tx || ny !== r.ty || nz !== r.tz || pdt >= 0.5) r.pt = now;
+      r.tx = nx; r.ty = ny; r.tz = nz; r.tyaw = pp[3];
     } else if (!r) {
       const s = spawn(gs);
       rrend[p.peer] = { x: s.x, y: 0, z: s.z, yaw: s.yaw, tx: s.x, ty: 0, tz: s.z, tyaw: s.yaw };
@@ -369,7 +370,7 @@ function applyHost(h) {
   if (Number.isInteger(h.k)) world.k = h.k;
   world.lg = Number.isInteger(h.lg) ? h.lg : -1;
   if (Array.isArray(h.tk)) world.tk = world.tk.map((v, i) => fin(h.tk[i], v));
-  world.pass = Number.isInteger(h.ps) && h.ps >= 0 ? { to: h.ps, t: 0.5 } : { to: -1, t: 0 };
+  world.pass = Number.isInteger(h.ps) && h.ps >= 0 ? { to: h.ps, t: 0.5, fl: clamp(fin(h.pf, 0), 0, 2) } : { to: -1, t: 0, fl: 0 };
   if (Array.isArray(h.sd)) world.sd = world.sd.map((v, i) => clamp(fin(h.sd[i], v), 0.2, 3));
 }
 
@@ -378,7 +379,7 @@ function packHost() {
   return {
     b: [b.x, b.y, b.z, b.vx, b.vy, b.vz].map(r2), bh: b.h,
     bt: world.bots.map(o => [r2(o.x), r2(o.z), r2(o.yaw), o.stun > 0 ? 1 : 0, r2(o.y)]), lp: world.lp,
-    sc: world.sc, tm: Math.round(world.tm * 10) / 10, ph: world.ph, k: world.k, lg: world.lg, tk: world.tk, sd: world.sd, ps: world.pass.t > 0 ? world.pass.to : -1,
+    sc: world.sc, tm: Math.round(world.tm * 10) / 10, ph: world.ph, k: world.k, lg: world.lg, tk: world.tk, sd: world.sd, ps: world.pass.t > 0 ? world.pass.to : -1, pf: r2(world.pass.fl),
   };
 }
 
@@ -503,7 +504,7 @@ async function startNet() {
 function kickoff() {
   const b = world.ball;
   Object.assign(b, { x: 0, y: 0.5, z: 0, vx: (Math.random() - 0.5) * 6, vy: 15, vz: (Math.random() - 0.5) * 8, h: -1 });
-  world.np = { gs: -1, t: 0 }; world.pass = { to: -1, t: 0 };
+  world.np = { gs: -1, t: 0 }; world.pass = { to: -1, t: 0, fl: 0 };
   world.k++;
   world.bots.forEach((o, i) => { const s = spawn(i); Object.assign(o, { x: s.x, z: s.z, y: 0, vy: 0, yaw: s.yaw, vx: 0, vz: 0, stun: 0, hold: 0 }); });
   world.koT = 0; world.lt = null;
@@ -526,7 +527,8 @@ function applyAct(gs, a) {
     world.np = { gs, t: 0.35 };
     world.lt = { t: teamOf(gs), x: o[0], z: o[2] };
     const r = a.r;
-    world.pass = Number.isInteger(r) && r >= 0 && r < 10 && r !== gs && teamOf(r) === teamOf(gs) ? { to: r, t: 2.2 } : { to: -1, t: 0 };
+    const ok = Number.isInteger(r) && r >= 0 && r < 10 && r !== gs && teamOf(r) === teamOf(gs);
+    world.pass = ok ? { to: r, t: 2.2, fl: clamp(fin(a.f, 0), 0, 2) } : { to: -1, t: 0, fl: 0 };
   } else if (a.t === "cl") {
     if (b.h >= 0 && b.h !== gs && teamOf(b.h) === teamOf(gs) && !isHuman(b.h)) {
       const c = world.bots[b.h]; c.call = gs; c.think = Math.min(c.think, 0.15);
@@ -575,6 +577,7 @@ function ballStep(dt, auth) {
   const b = world.ball;
   if (world.np.t > 0) world.np.t -= dt;
   if (world.pass.t > 0) world.pass.t -= dt;
+  if (world.pass.fl > 0 && b.h >= 0) world.pass.fl = 0;
   if (world.slamT > 0) world.slamT -= dt;
   if (b.h >= 0) {
     if (b.h === me.gs && me.playing && me.relT > 0) { b.h = -1; }
@@ -595,7 +598,10 @@ function ballStep(dt, auth) {
   const n = 3, h = dt / n;
   for (let s = 0; s < n; s++) {
     const py = b.y, pxAbs = Math.abs(b.x);
-    b.vy -= G * h;
+    // a pass flies dead straight along its 3D line until it arrives or hits something
+    const fl = world.pass.fl > 0;
+    if (fl) world.pass.fl -= h; else b.vy -= G * h;
+    const ovx = b.vx, ovy = b.vy, ovz = b.vz;
     b.x += b.vx * h; b.y += b.vy * h; b.z += b.vz * h;
     if (b.y < BR) {
       b.y = BR;
@@ -626,6 +632,7 @@ function ballStep(dt, auth) {
         b.vx *= 0.3; b.vz *= 0.3;
       }
     }
+    if (fl && (b.vx !== ovx || b.vy !== ovy || b.vz !== ovz)) world.pass.fl = 0;
   }
   if (auth && world.ph === "play" && world.koT <= 0) {
     let best = -1, bd = 1e9;
@@ -677,6 +684,18 @@ function catchY(j, t) {
   const y = posOf(j).y || 0, vy = velOf(j).y;
   return (y > 0.05 || vy > 0 ? Math.max(0, y + vy * t - 0.5 * PG * t * t) : 0) + 1.3;
 }
+// a pass: straight from o to where receiver j's chest will be when it arrives, at the passer's pass speed
+function pass3d(o, j, speed, wob) {
+  const p = posOf(j), v = velOf(j);
+  let t = 0, tgt = o;
+  for (let k = 0; k < 3; k++) { // lead the receiver: refine arrival time against their predicted spot
+    tgt = [clamp(p.x + v.x * t, -HL + 1, HL - 1), catchY(j, t), clamp(p.z + v.z * t, -HW + 1, HW - 1)];
+    t = Math.hypot(tgt[0] - o[0], tgt[1] - o[1], tgt[2] - o[2]) / speed;
+  }
+  if (wob) { tgt[0] += (Math.random() - 0.5) * wob; tgt[1] += (Math.random() - 0.5) * wob * 0.4; tgt[2] += (Math.random() - 0.5) * wob; }
+  const d = [tgt[0] - o[0], tgt[1] - o[1], tgt[2] - o[2]], len = Math.hypot(...d) || 1;
+  return { v: d.map(c => c / len * speed), f: len / speed + 0.25 };
+}
 // prefer: a teammate who called for the ball; forwardOnly: only look for a clearly advanced receiver
 function botPass(i, prefer = -1, forwardOnly = false) {
   const o = world.bots[i], t = teamOf(i), dir = dirOf(t);
@@ -692,12 +711,10 @@ function botPass(i, prefer = -1, forwardOnly = false) {
     if (s > bs) { bs = s; best = j; }
   }
   if (best < 0) return false;
-  const p = posOf(best), v = velOf(best), f = fwd(o.yaw);
-  const org = [o.x + f.x * 0.6, (o.y || 0) + 1.4, o.z + f.z * 0.6];
-  const ps = clsOf(i).pass, lead = Math.hypot(p.x - o.x, p.z - o.z) / ps * 0.85;
+  const f = fwd(o.yaw), org = [o.x + f.x * 0.6, (o.y || 0) + 1.4, o.z + f.z * 0.6];
   const wob = clsOf(i).id === "bruiser" ? 2.5 : 0; // bruisers spray their passes
-  const tgt = [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), catchY(best, lead / 0.85), clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)];
-  applyAct(i, { t: "th", o: org, v: lob(org, tgt, ps), r: best });
+  const ps = pass3d(org, best, clsOf(i).pass, wob);
+  applyAct(i, { t: "th", o: org, v: ps.v, r: best, f: ps.f });
   return true;
 }
 
@@ -859,14 +876,15 @@ function aimDir() {
   const cp = Math.cos(me.pitch);
   return { x: -Math.sin(me.yaw) * cp, y: Math.sin(me.pitch), z: -Math.cos(me.yaw) * cp };
 }
-function sendAct(t, o, v, r = -1) {
+function sendAct(t, o, v, r = -1, f = 0) {
   me.actN++;
-  me.act = { n: me.actN, t, o: o.map(r2), v: v ? v.map(r2) : null, r };
+  me.act = { n: me.actN, t, o: o.map(r2), v: v ? v.map(r2) : null, r, f: r2(f) };
   pubT = 0;
   if (isHost()) applyAct(me.gs, me.act);
   else if (t === "th" || (t === "kk" && holding())) {
     Object.assign(world.ball, { h: -1, x: o[0], y: o[1], z: o[2], vx: v[0], vy: v[1], vz: v[2] });
     me.relT = 0.35;
+    if (r >= 0) world.pass = { to: r, t: 2.2, fl: f };
   } else if (t === "kk") {
     const b = world.ball;
     if (b.h < 0 && Math.hypot(o[0] - b.x, o[2] - b.z) < 2.4 && b.y < 2.6) { b.vx = v[0]; b.vy = v[1]; b.vz = v[2]; }
@@ -907,11 +925,9 @@ function doPass() {
     if (dot > 0.2 && s > bs) { bs = s; best = j; }
   }
   if (best < 0) { doThrow(); return; }
-  const p = posOf(best), v = velOf(best);
   const o = [me.x + d.x * 0.7, me.y + 1.45, me.z + d.z * 0.7];
-  const C = CLASSES[me.cls], wob = C.id === "bruiser" ? 2.5 : 0;
-  const lead = Math.hypot(p.x - me.x, p.z - me.z) / C.pass * 0.85;
-  sendAct("th", o, lob(o, [clamp(p.x + v.x * lead + (Math.random() - 0.5) * wob, -HL + 1, HL - 1), catchY(best, lead / 0.85), clamp(p.z + v.z * lead + (Math.random() - 0.5) * wob, -HW + 1, HW - 1)], C.pass), best);
+  const C = CLASSES[me.cls], ps = pass3d(o, best, C.pass, C.id === "bruiser" ? 2.5 : 0);
+  sendAct("th", o, ps.v, best, ps.f);
   toast("Pass");
 }
 function setClass(ci) {
